@@ -1,0 +1,7 @@
+{
+  "alternator_whine": 0,
+  "belt_squeal": 1,
+  "engine_idle": 2,
+  "rod_knock": 3,
+  "timing_chain_rattle": 4
+}
