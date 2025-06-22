@@ -10,6 +10,7 @@ import importlib, inspect, os, sqlite3, subprocess, sys, tempfile, traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
+# ensure our local modules are on the path
 sys.path.insert(0, "/app")
 
 import torch, torchaudio
@@ -31,23 +32,23 @@ SEARCH_MODULES = ["stage1_model", "pannsupgraded_model", "pannsupgraded"]
 CLASS_STAGE1, CLASS_STAGE2 = "Stage1EngineDetector", "PannsChecklist"
 
 DISPLAY = {
-    "alternator_whine":  "Alternator Whine",
-    "pulley_belt_noise": "Pulley Bearing / Serpentine Belt Noise",
-    "rod_knock":         "Rod Knock",
-    "timing_chain_rattle": "Timing Chain Rattle",
+    "alternator_whine":      "Alternator Whine",
+    "pulley_belt_noise":     "Pulley Bearing / Serpentine Belt Noise",
+    "rod_knock":             "Rod Knock",
+    "timing_chain_rattle":   "Timing Chain Rattle",
 }
-MODEL_LABELS = list(DISPLAY.keys()) + ["engine_idle", "silence"]
-IGNORE_LABELS = {"engine_idle", "silence"}
+MODEL_LABELS   = list(DISPLAY.keys()) + ["engine_idle", "silence"]
+IGNORE_LABELS  = {"engine_idle", "silence"}
 
-CONF, FLAG = 0.80, 0.60
-SILENCE_THRESH = 0.80
+CONF, FLAG        = 0.80, 0.60
+SILENCE_THRESH    = 0.80
 TARGET_SR, CLIP_SEC = 32_000, 5
 
 FREE_CHATS_PER_DAY, AD_EVERY = 9, 3
-GPT_MODEL, TEMP = "gpt-3.5-turbo", 0.4
+GPT_MODEL, TEMP    = "gpt-3.5-turbo", 0.4
 MAX_HISTORY, SUMMARY_TRIGGER = 20, 3000
-DB_PATH = Path("usage.db")
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DB_PATH           = Path("usage.db")
+DEVICE            = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ────────── FLASK ──────────
 app = Flask(__name__)
@@ -76,23 +77,27 @@ with db() as c:
         """
     )
 
-def today(): return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+def today() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-def quota(device:str):
+def quota(device: str):
     with db() as c:
-        c.execute("INSERT OR IGNORE INTO usage VALUES(?,?,0,0)", (device,today()))
+        c.execute("INSERT OR IGNORE INTO usage VALUES(?,?,0,0)", (device, today()))
         cnt, sub = c.execute(
             "SELECT count, subscriber FROM usage WHERE device=? AND date=?",
             (device, today())
         ).fetchone()
-        if sub: return True, False, cnt          # subscriber = unlimited
-        if cnt >= FREE_CHATS_PER_DAY:            # free tier exhausted
-            return False, False, cnt
-        c.execute("UPDATE usage SET count=count+1 WHERE device=? AND date=?",
-                  (device, today()))
+        if sub:
+            return True, False, cnt        # subscriber = unlimited
+        if cnt >= FREE_CHATS_PER_DAY:
+            return False, False, cnt       # free tier exhausted
+        c.execute(
+            "UPDATE usage SET count=count+1 WHERE device=? AND date=?",
+            (device, today())
+        )
         c.commit()
         cnt += 1
-        return True, cnt % AD_EVERY == 0, cnt    # ok, maybe show ad
+        return True, (cnt % AD_EVERY == 0), cnt
 
 @app.route("/subscribe", methods=["POST"])
 def subscribe():
@@ -106,10 +111,10 @@ def subscribe():
 
 # ────────── AUDIO ──────────
 def ffmpeg(src: Path, dst: Path):
-    subprocess.check_call(
-        ["ffmpeg", "-v", "quiet", "-y", "-i", str(src),
-         "-ac", "1", "-ar", str(TARGET_SR), str(dst)]
-    )
+    subprocess.check_call([
+        "ffmpeg", "-v", "quiet", "-y", "-i", str(src),
+        "-ac", "1", "-ar", str(TARGET_SR), str(dst)
+    ])
 
 def wav_tensor(w: Path):
     x, sr = torchaudio.load(str(w))
@@ -123,25 +128,29 @@ def wav_tensor(w: Path):
     return x.to(DEVICE)
 
 # ────────── MODEL loading ──────────
-def lazy(cls):
+def lazy(cls_name: str):
     for m in SEARCH_MODULES:
         try:
             mod = importlib.import_module(m)
-            if hasattr(mod, cls):
-                return getattr(mod, cls)
+            if hasattr(mod, cls_name):
+                return getattr(mod, cls_name)
         except ModuleNotFoundError:
-            pass
-    sys.exit(f"{cls} not found")
+            continue
+    sys.exit(f"{cls_name} not found")
 
 def load_or_build(path: Path, cls_name: str, labels: int):
     obj = torch.load(path, map_location=DEVICE)
+    # if the checkpoint already *is* a nn.Module
     if hasattr(obj, "eval"):
         return obj.to(DEVICE).eval()
-    cls = lazy(cls_name)
-    model = cls(**{p: labels for p in inspect.signature(cls).parameters
-                   if p in ("num_labels", "num_classes", "classes")}).to(DEVICE)
+    # else rebuild from class + state_dict
+    cls   = lazy(cls_name)
+    model = cls(**{
+        k: labels for k in inspect.signature(cls).parameters
+        if k in ("num_labels", "num_classes", "classes")
+    }).to(DEVICE)
     model.load_state_dict(obj.get("state_dict", obj), strict=False)
-    model.eval()
+    model.eval()            # ← fixed indentation
     return model
 
 stage1 = load_or_build(STAGE1_PTH, CLASS_STAGE1, 2)
@@ -165,6 +174,7 @@ def predict():
     f = request.files.get("file")
     if not f:
         return jsonify({"error": "no file"}), 400
+
     with tempfile.TemporaryDirectory() as td:
         raw, wav = Path(td) / "raw", Path(td) / "clip.wav"
         f.save(raw)
@@ -183,7 +193,7 @@ def store(dev, role, text):
     with db() as c:
         c.execute(
             "INSERT INTO chat VALUES(?,?,?,?)",
-            (dev, int(datetime.utcnow().timestamp()*1000), role, text)
+            (dev, int(datetime.utcnow().timestamp() * 1000), role, text)
         )
         c.commit()
 
@@ -209,19 +219,21 @@ def maybe_sum(dev):
             messages=[{"role": "system", "content": "Summarise chat ≤100 words:"}]
                      + hist(dev),
             temperature=0.3,
-            max_tokens=120,
+            max_tokens=120
         ).choices[0].message.content.strip()
     except OpenAIError:
         return
+
     with db() as c:
         c.execute("DELETE FROM chat WHERE device=?", (dev,))
         c.execute(
-            "INSERT OR REPLACE INTO summary VALUES(?,?)", (dev, summ)
+            "INSERT OR REPLACE INTO summary VALUES(?,?)",
+            (dev, summ)
         )
         c.commit()
 
 # ────────── helpers ──────────
-def intro(no_fault: bool, faults: str):
+def intro(no_fault: bool, faults: str) -> str:
     if no_fault:
         return (
             "Hi, I'm CarDoc AI. I didn’t detect a clear engine-sound pattern.\n"
@@ -234,7 +246,7 @@ def intro(no_fault: bool, faults: str):
         "and when/where you hear the noise (cold start, idle, acceleration, etc.)?"
     )
 
-def system_prompt(faults: str):
+def system_prompt(faults: str) -> str:
     return (
         "You are CarDoc AI, an automotive assistant.\n"
         f"Focus on these suspected faults: {faults or 'None'}.\n"
@@ -248,16 +260,16 @@ def system_prompt(faults: str):
 # ────────── /gpt-helper ──────────
 @app.route("/gpt-helper", methods=["POST"])
 def helper():
-    d = request.get_json(force=True)
-    dev = d.get("device_id") or request.remote_addr or "unknown"
-    ok, show_ad, cnt = quota(dev)
+    d      = request.get_json(force=True)
+    dev    = d.get("device_id") or request.remote_addr or "unknown"
+    ok, ad, cnt = quota(dev)
     if not ok:
         return jsonify({"error": "quota_exceeded", "limit": FREE_CHATS_PER_DAY}), 402
 
-    scores = d.get("scores", {})
+    scores   = d.get("scores", {})
     no_fault = scores.get("_no_fault")
-    convo = d.get("conversation") or []
-    first_turn = len(convo) == 0
+    convo    = d.get("conversation") or []
+    first    = len(convo) == 0
     user_msg = convo[-1].get("text", "") if convo else ""
 
     faults = [
@@ -266,13 +278,11 @@ def helper():
     ]
     faults_line = ", ".join(faults)
 
-    # first reply (deterministic, no GPT)
-    if first_turn:
+    if first:
         reply = intro(bool(no_fault), faults_line)
         store(dev, "assistant", reply)
-        return jsonify({"reply": reply, "show_ad": show_ad, "count": cnt})
+        return jsonify({"reply": reply, "show_ad": ad, "count": cnt})
 
-    # GPT turn
     ctx = [{"role": "system", "content": system_prompt(faults_line)}]
     with db() as c:
         row = c.execute(
@@ -281,23 +291,23 @@ def helper():
     if row:
         ctx.append({"role": "system", "content": "Summary: " + row["content"]})
     ctx += hist(dev)
-    ctx.append({"role": "user", "content": user_msg})
+    ctx.append({"role": "user",    "content":  user_msg})
 
     try:
         reply = client.chat.completions.create(
             model=GPT_MODEL,
             messages=ctx,
             temperature=TEMP,
-            max_tokens=180,
+            max_tokens=180
         ).choices[0].message.content.strip()
     except OpenAIError as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-    store(dev, "user", user_msg)
+    store(dev, "user",    user_msg)
     store(dev, "assistant", reply)
     maybe_sum(dev)
-    return jsonify({"reply": reply, "show_ad": show_ad, "count": cnt})
+    return jsonify({"reply": reply, "show_ad": ad, "count": cnt})
 
 # ────────── run ──────────
 if __name__ == "__main__":
