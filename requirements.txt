@@ -1,9 +1,15 @@
+# requirements.txt  (add the two lines ↓)
+
 flask==3.0.3
 flask-cors==4.0.0
 flask-limiter==3.5.0        # rate-limit
 gunicorn==21.2.0
 gevent==23.9.1              # async worker class
 python-dotenv==1.0.0
-openai==1.30.4
+
+openai==1.30.4              # needs httpx ≤ 0.26
+httpx==0.26.0               # pin to keep “proxies” kwarg
+
 torch==2.3.0
 torchaudio==2.3.0
+numpy==1.26.4               # torchaudio/kaldi needs it
