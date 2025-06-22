@@ -10,6 +10,8 @@ import importlib, inspect, os, sqlite3, subprocess, sys, tempfile, traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
+sys.path.insert(0, "/app")
+
 import torch, torchaudio
 from openai import OpenAI, OpenAIError
 from dotenv import load_dotenv
