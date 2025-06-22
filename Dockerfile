@@ -1,44 +1,32 @@
-# ---------- base image ----------
-FROM python:3.11-slim AS base
+# Dockerfile — CarDoc AI
 
-# ─ Prevent Python from writing .pyc files & buffer stdout/stderr
+FROM python:3.11.5-slim AS base
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# ─ Working directory
 WORKDIR /app
 
-# ─ Install ffmpeg & curl for audio transcoding and downloads
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-      ffmpeg curl && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-# ─ Expose the port your Flask/Gunicorn server listens on
-ENV PORT=5050
-EXPOSE 5050
-
-# ─ Build-time args for your S3 model URLs
-ARG STAGE1_URL="https://cardoc-models-us-east-2.s3.amazonaws.com/models/stage1_engine_detector.pth"
-ARG STAGE2_URL="https://cardoc-models-us-east-2.s3.amazonaws.com/models/panns_cnn14_checklist_best_aug.pth"
-
-# ─ Fetch Stage-1 and Stage-2 checkpoints from S3
-RUN mkdir -p models && \
-    echo "→ Downloading Stage-1 model…" && \
-    curl -fSL "$STAGE1_URL"  -o models/stage1_engine_detector.pth && \
-    echo "→ Downloading Stage-2 model…" && \
-    curl -fSL "$STAGE2_URL"  -o models/panns_cnn14_checklist_best_aug.pth
-
-# ─ Copy & install Python dependencies
+# 1) Install Python deps
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ─ Copy application code
+# 2) Pull both models from S3 via presigned URLs
+ARG STAGE1_URL
+ARG STAGE2_URL
+
+RUN mkdir -p models \
+ && if [ -z "$STAGE1_URL" ]; then echo "❌ STAGE1_URL is empty" && exit 1; fi \
+ && curl -sSL "$STAGE1_URL" -o models/stage1_engine_detector.pth \
+ && if [ -z "$STAGE2_URL" ]; then echo "❌ STAGE2_URL is empty" && exit 1; fi \
+ && curl -sSL "$STAGE2_URL" -o models/panns_cnn14_checklist_best_aug.pth
+
+# 3) Copy your app code
 COPY . .
 
-# ─ Ensure your app can do absolute imports from /app
-ENV PYTHONPATH=/app
+# 4) Tell Docker which port your Flask/Gunicorn listens on
+EXPOSE 5050
 
-# ─ Launch with Gunicorn + Gevent
-CMD ["gunicorn", "-k", "gevent", "-w", "4", "-b", "0.0.0.0:$PORT", "app:app"]
+# 5) Launch under Gunicorn + Gevent
+CMD ["gunicorn", "-k", "gevent", "-w", "4", "-b", "0.0.0.0:5050", "app:app"]
