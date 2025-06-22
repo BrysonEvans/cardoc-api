@@ -1,25 +1,37 @@
-# Use the exact 3.11.5 slim image so it matches your local env
-FROM python:3.11.5-slim
+# ────────── base image ──────────
+FROM python:3.11-slim
 
-# Don’t write .pyc files, buffer stdout/stderr
+# ────────── metadata ──────────
+LABEL maintainer="you@example.com"
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=on
+    PYTHONUNBUFFERED=1
 
+# ────────── system deps ──────────
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
+
+# ────────── workdir ──────────
 WORKDIR /app
 
-# Install Python deps
+# ────────── python deps ──────────
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy your code
+# ────────── model fetch ──────────
+# You must set these two build‐args (or env vars) to your presigned URLs
+ARG STAGE1_URL
+ARG STAGE2_URL
+
+RUN mkdir -p models \
+ && curl -sSL "$STAGE1_URL" -o models/stage1_engine_detector.pth \
+ && curl -sSL "$STAGE2_URL" -o models/panns_cnn14_checklist_best_aug.pth
+
+# ────────── copy source ──────────
 COPY . .
 
-# At build time, fetch both models from your presigned URLs
-# (Render will inject STAGE1_URL and STAGE2_URL from your Env settings)
-RUN mkdir -p models && \
-    curl -fSL "$STAGE1_URL" -o models/stage1_engine_detector.pth && \
-    curl -fSL "$STAGE2_URL" -o models/panns_cnn14_checklist_best_aug.pth
-
-# Launch under Gunicorn + gevent on $PORT
+# ────────── runtime ──────────
+# Render (and many PaaSes) will set $PORT for you
+EXPOSE 5050
 CMD ["gunicorn", "-k", "gevent", "-w", "4", "-b", "0.0.0.0:$PORT", "app:app"]
