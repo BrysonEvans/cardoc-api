@@ -1,0 +1,2 @@
+# Exclude everything in models/ from Docker build context
+models/
