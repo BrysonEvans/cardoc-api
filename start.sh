@@ -4,20 +4,26 @@ set -e
 echo "📁 Ensuring models directory…"
 mkdir -p models
 
-# Download Stage1 model if it's not already present
-if [ ! -f models/stage1_engine_detector.pth ]; then
-  echo "⏬ Downloading Stage1 model from $STAGE1_URL"
-  curl -fsSL "$STAGE1_URL" -o models/stage1_engine_detector.pth
+# ========== Stage1 ==========
+echo "⏬ Downloading Stage1 model from:"
+echo "   $STAGE1_URL"
+
+if ! curl -fSL -- "$STAGE1_URL" -o "models/stage1_engine_detector.pth"; then
+  echo "❌ ERROR: Stage1 download failed (curl exit $?)"
+  exit 1
 else
-  echo "✅ Stage1 model already present"
+  echo "✅ Stage1 model downloaded"
 fi
 
-# Download Stage2 model if it's not already present
-if [ ! -f models/panns_cnn14_checklist_best_aug.pth ]; then
-  echo "⏬ Downloading Stage2 model from $STAGE2_URL"
-  curl -fsSL "$STAGE2_URL" -o models/panns_cnn14_checklist_best_aug.pth
+# ========== Stage2 ==========
+echo "⏬ Downloading Stage2 model from:"
+echo "   $STAGE2_URL"
+
+if ! curl -fSL -- "$STAGE2_URL" -o "models/panns_cnn14_checklist_best_aug.pth"; then
+  echo "❌ ERROR: Stage2 download failed (curl exit $?)"
+  exit 1
 else
-  echo "✅ Stage2 model already present"
+  echo "✅ Stage2 model downloaded"
 fi
 
 echo "🚀 Starting Gunicorn…"
