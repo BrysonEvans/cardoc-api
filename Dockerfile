@@ -1,14 +1,15 @@
 # Dockerfile — CarDoc AI
-FROM python:3.11-slim
+FROM python:3.11.5-slim
 
-# Don’t write .pyc, buffer stdout/stderr
-ENV PYTHONDONTWRITEBYTECODE=1 \
+# 1) Never prompt & no .pyc, no pip version checks
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
 
-# 1) Install system deps (including gcc, make, TA-Lib headers, ffmpeg, curl)
+# 2) System deps: gcc, make, TA-Lib headers, ffmpeg, curl
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       build-essential \
@@ -17,15 +18,15 @@ RUN apt-get update && \
       curl && \
     rm -rf /var/lib/apt/lists/*
 
-# 2) Install Python deps
+# 3) Python deps
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 3) Copy app code
+# 4) Copy app + helper script
 COPY . .
+COPY start.sh .
+RUN chmod +x start.sh
 
-# 4) Expose Flask port
+# 5) Expose & run
 EXPOSE 5050
-
-# 5) Runtime entrypoint
-CMD ["gunicorn", "-k", "gevent", "-w", "4", "-b", "0.0.0.0:$PORT", "app:app"]
+CMD ["./start.sh"]
