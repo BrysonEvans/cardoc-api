@@ -1,30 +1,29 @@
-# Use the exact same image you develop against
-FROM python:3.11.5-slim
+# Use slim so the image stays small
+FROM python:3.11-slim
 
-# 1) Install system deps: build tools + ffmpeg + curl
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-      build-essential \
-      python3-dev \
-      ffmpeg \
-      curl \
-    && rm -rf /var/lib/apt/lists/*
+# Don’t write .pyc files, buffer stdout/stderr
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
 
-# 2) Copy & install Python deps (including matplotlib)
+# 1) Copy & install Python deps
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ffmpeg curl \
+ && rm -rf /var/lib/apt/lists/* \
+ && pip install .
 
-# 3) Copy your full backend
+# 2) Copy the rest of your code + helper
 COPY . .
 
-# 4) Make start script executable
+# 3) Make start script executable
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
-# Render (and Heroku, etc.) will bind your app to the $PORT env var
-EXPOSE $PORT
+# 4) Bind to the PORT Render gives us
+EXPOSE 10000
 
-# 5) At container start, fetch models and launch Gunicorn
-CMD ["/start.sh"]
+ENTRYPOINT ["/start.sh"]
