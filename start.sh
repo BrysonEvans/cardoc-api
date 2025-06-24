@@ -4,9 +4,8 @@ set -euo pipefail
 echo "📁 Ensuring models directory…"
 mkdir -p models
 
-# sanity-check
 if [ -z "${STAGE1_URL:-}" ] || [ -z "${STAGE2_URL:-}" ]; then
-  echo "❌ STAGE1_URL and STAGE2_URL must be set" >&2
+  echo "❌ You must set both STAGE1_URL and STAGE2_URL" >&2
   exit 1
 fi
 
