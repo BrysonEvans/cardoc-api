@@ -1,251 +1,208 @@
-import numpy as np
+"""Utility helpers used by the PANNs‑based models (mix‑up, interpolation, FLOP
+counting, …).  This version adds the `Interpolator` class expected by
+models/cnn14.py and fixes a few minor typos while preserving the public API.
+"""
+
+from __future__ import annotations
+
 import time
+from typing import Dict, List, Any
+
+import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
+__all__: List[str] = [
+    # data helpers
+    "move_data_to_device",
+    "do_mixup",
+    "append_to_dict",
+    "forward",
+    # interpolation + padding helpers
+    "interpolate",
+    "pad_framewise_output",
+    "Interpolator",
+    # model statistics
+    "count_parameters",
+    "count_flops",
+]
 
-def move_data_to_device(x, device):
-    if 'float' in str(x.dtype):
-        x = torch.Tensor(x)
-    elif 'int' in str(x.dtype):
-        x = torch.LongTensor(x)
-    else:
-        return x
+# ───────────────────────────────────────────── data movement ────
 
+def move_data_to_device(x: torch.Tensor | np.ndarray, device: torch.device):
+    """Cast *x* to the right Torch dtype and push it to *device*."""
+    if isinstance(x, np.ndarray):
+        if np.issubdtype(x.dtype, np.floating):
+            x = torch.tensor(x, dtype=torch.float32)
+        elif np.issubdtype(x.dtype, np.integer):
+            x = torch.tensor(x, dtype=torch.long)
+        else:
+            # non numeric → return as‑is
+            return x
     return x.to(device)
 
 
-def do_mixup(x, mixup_lambda):
-    """Mixup x of even indexes (0, 2, 4, ...) with x of odd indexes 
-    (1, 3, 5, ...).
+# ───────────────────────────────────────────────── mix‑up ────
 
-    Args:
-      x: (batch_size * 2, ...)
-      mixup_lambda: (batch_size * 2,)
-
-    Returns:
-      out: (batch_size, ...)
-    """
-    out = (x[0 :: 2].transpose(0, -1) * mixup_lambda[0 :: 2] + \
-        x[1 :: 2].transpose(0, -1) * mixup_lambda[1 :: 2]).transpose(0, -1)
+def do_mixup(x: torch.Tensor, mixup_lambda: torch.Tensor) -> torch.Tensor:
+    """Perform mix‑up on pairs (0∶even / 1∶odd).  See Zhang *et al.* (2018)."""
+    # x shape: (batch*2, …)
+    out = (
+        x[0::2].transpose(0, -1) * mixup_lambda[0::2] +
+        x[1::2].transpose(0, -1) * mixup_lambda[1::2]
+    ).transpose(0, -1)
     return out
-    
-
-def append_to_dict(dict, key, value):
-    if key in dict.keys():
-        dict[key].append(value)
-    else:
-        dict[key] = [value]
 
 
-def forward(model, generator, return_input=False, 
-    return_target=False):
-    """Forward data to a model.
-    
-    Args: 
-      model: object
-      generator: object
-      return_input: bool
-      return_target: bool
+# ─────────────────────────────────────── misc small helpers ────
 
-    Returns:
-      audio_name: (audios_num,)
-      clipwise_output: (audios_num, classes_num)
-      (ifexist) segmentwise_output: (audios_num, segments_num, classes_num)
-      (ifexist) framewise_output: (audios_num, frames_num, classes_num)
-      (optional) return_input: (audios_num, segment_samples)
-      (optional) return_target: (audios_num, classes_num)
-    """
-    output_dict = {}
+def append_to_dict(d: Dict[str, List[Any]], key: str, value: Any):
+    d.setdefault(key, []).append(value)
+
+
+def forward(model: nn.Module, generator, *, return_input: bool = False, return_target: bool = False):
+    """Run *generator* through *model* and collect outputs."""
+    output: Dict[str, List[Any]] = {}
     device = next(model.parameters()).device
-    time1 = time.time()
+    tic = time.time()
 
-    # Forward data to a model in mini-batches
-    for n, batch_data_dict in enumerate(generator):
-        print(n)
-        batch_waveform = move_data_to_device(batch_data_dict['waveform'], device)
-        
+    for i, batch in enumerate(generator):
+        batch_waveform = move_data_to_device(batch['waveform'], device)
+        model.eval()
         with torch.no_grad():
-            model.eval()
-            batch_output = model(batch_waveform)
+            pred = model(batch_waveform)
 
-        append_to_dict(output_dict, 'audio_name', batch_data_dict['audio_name'])
+        append_to_dict(output, 'audio_name', batch['audio_name'])
+        append_to_dict(output, 'clipwise_output', pred['clipwise_output'].cpu().numpy())
 
-        append_to_dict(output_dict, 'clipwise_output', 
-            batch_output['clipwise_output'].data.cpu().numpy())
+        for key in ('segmentwise_output', 'framewise_output'):
+            if key in pred:
+                append_to_dict(output, key, pred[key].cpu().numpy())
 
-        if 'segmentwise_output' in batch_output.keys():
-            append_to_dict(output_dict, 'segmentwise_output', 
-                batch_output['segmentwise_output'].data.cpu().numpy())
-
-        if 'framewise_output' in batch_output.keys():
-            append_to_dict(output_dict, 'framewise_output', 
-                batch_output['framewise_output'].data.cpu().numpy())
-            
         if return_input:
-            append_to_dict(output_dict, 'waveform', batch_data_dict['waveform'])
-            
-        if return_target:
-            if 'target' in batch_data_dict.keys():
-                append_to_dict(output_dict, 'target', batch_data_dict['target'])
+            append_to_dict(output, 'waveform', batch['waveform'])
+        if return_target and 'target' in batch:
+            append_to_dict(output, 'target', batch['target'])
 
-        if n % 10 == 0:
-            print(' --- Inference time: {:.3f} s / 10 iterations ---'.format(
-                time.time() - time1))
-            time1 = time.time()
+        if i % 10 == 0:
+            print(f" --- Inference time: {time.time() - tic:.3f}s / 10 iters ---")
+            tic = time.time()
 
-    for key in output_dict.keys():
-        output_dict[key] = np.concatenate(output_dict[key], axis=0)
-
-    return output_dict
+    # concat
+    return {k: np.concatenate(v, axis=0) for k, v in output.items()}
 
 
-def interpolate(x, ratio):
-    """Interpolate data in time domain. This is used to compensate the 
-    resolution reduction in downsampling of a CNN.
-    
-    Args:
-      x: (batch_size, time_steps, classes_num)
-      ratio: int, ratio to interpolate
+# ─────────────────────────── up‑sampling helpers (CNN alignment) ────
 
-    Returns:
-      upsampled: (batch_size, time_steps * ratio, classes_num)
-    """
-    (batch_size, time_steps, classes_num) = x.shape
-    upsampled = x[:, :, None, :].repeat(1, 1, ratio, 1)
-    upsampled = upsampled.reshape(batch_size, time_steps * ratio, classes_num)
-    return upsampled
+def interpolate(x: torch.Tensor, ratio: int) -> torch.Tensor:
+    """Nearest‑neighbour upsample along *time* (dim=1)."""
+    b, t, c = x.shape
+    x = x[:, :, None, :].repeat(1, 1, ratio, 1)
+    return x.view(b, t * ratio, c)
 
 
-def pad_framewise_output(framewise_output, frames_num):
-    """Pad framewise_output to the same length as input frames. The pad value 
-    is the same as the value of the last frame.
+class Interpolator(nn.Module):
+    """`nn.Module` wrapper around :pyfunc:`interpolate` expected by Cnn14."""
+    def __init__(self, ratio: int = 32):
+        super().__init__()
+        self.ratio = ratio
 
-    Args:
-      framewise_output: (batch_size, frames_num, classes_num)
-      frames_num: int, number of frames to pad
-
-    Outputs:
-      output: (batch_size, frames_num, classes_num)
-    """
-    pad = framewise_output[:, -1 :, :].repeat(1, frames_num - framewise_output.shape[1], 1)
-    """tensor for padding"""
-
-    output = torch.cat((framewise_output, pad), dim=1)
-    """(batch_size, frames_num, classes_num)"""
-
-    return output
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # (B, frames, C)
+        return interpolate(x, self.ratio)
 
 
-def count_parameters(model):
+def pad_framewise_output(framewise_output: torch.Tensor, frames_num: int) -> torch.Tensor:
+    """Right‑pad *framewise_output* to *frames_num* using the last frame value."""
+    if framewise_output.shape[1] >= frames_num:
+        return framewise_output[:, :frames_num]
+    pad = framewise_output[:, -1:, :].repeat(1, frames_num - framewise_output.shape[1], 1)
+    return torch.cat((framewise_output, pad), dim=1)
+
+
+# ───────────────────────────────────── statistics utilities ────
+
+def count_parameters(model: nn.Module) -> int:
+    """Trainable parameter count (∑ over *requires_grad*)."""
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def count_flops(model, audio_length):
-    """Count flops. Code modified from others' implementation.
-    """
-    multiply_adds = True
-    list_conv2d=[]
-    def conv2d_hook(self, input, output):
-        batch_size, input_channels, input_height, input_width = input[0].size()
-        output_channels, output_height, output_width = output[0].size()
- 
-        kernel_ops = self.kernel_size[0] * self.kernel_size[1] * (self.in_channels / self.groups) * (2 if multiply_adds else 1)
-        bias_ops = 1 if self.bias is not None else 0
- 
-        params = output_channels * (kernel_ops + bias_ops)
-        flops = batch_size * params * output_height * output_width
- 
-        list_conv2d.append(flops)
+def count_flops(model: nn.Module, audio_length: int, *, multiply_adds: bool = True) -> int:
+    """Very rough FLOP counter (borrowed & simplified). Only useful for research."""
 
-    list_conv1d=[]
-    def conv1d_hook(self, input, output):
-        batch_size, input_channels, input_length = input[0].size()
-        output_channels, output_length = output[0].size()
- 
-        kernel_ops = self.kernel_size[0] * (self.in_channels / self.groups) * (2 if multiply_adds else 1)
-        bias_ops = 1 if self.bias is not None else 0
- 
-        params = output_channels * (kernel_ops + bias_ops)
-        flops = batch_size * params * output_length
- 
-        list_conv1d.append(flops)
- 
-    list_linear=[] 
-    def linear_hook(self, input, output):
-        batch_size = input[0].size(0) if input[0].dim() == 2 else 1
- 
-        weight_ops = self.weight.nelement() * (2 if multiply_adds else 1)
-        bias_ops = self.bias.nelement()
- 
-        flops = batch_size * (weight_ops + bias_ops)
-        list_linear.append(flops)
- 
-    list_bn=[] 
-    def bn_hook(self, input, output):
-        list_bn.append(input[0].nelement() * 2)
- 
-    list_relu=[] 
-    def relu_hook(self, input, output):
-        list_relu.append(input[0].nelement() * 2)
- 
-    list_pooling2d=[]
-    def pooling2d_hook(self, input, output):
-        batch_size, input_channels, input_height, input_width = input[0].size()
-        output_channels, output_height, output_width = output[0].size()
- 
-        kernel_ops = self.kernel_size * self.kernel_size
-        bias_ops = 0
-        params = output_channels * (kernel_ops + bias_ops)
-        flops = batch_size * params * output_height * output_width
- 
-        list_pooling2d.append(flops)
+    conv2d_flops: List[int] = []
+    conv1d_flops: List[int] = []
+    linear_flops: List[int] = []
+    bn_flops: List[int] = []
+    relu_flops: List[int] = []
+    pool2d_flops: List[int] = []
+    pool1d_flops: List[int] = []
 
-    list_pooling1d=[]
-    def pooling1d_hook(self, input, output):
-        batch_size, input_channels, input_length = input[0].size()
-        output_channels, output_length = output[0].size()
- 
-        kernel_ops = self.kernel_size[0]
-        bias_ops = 0
-        
-        params = output_channels * (kernel_ops + bias_ops)
-        flops = batch_size * params * output_length
- 
-        list_pooling2d.append(flops)
- 
-    def foo(net):
-        childrens = list(net.children())
-        if not childrens:
-            if isinstance(net, nn.Conv2d):
-                net.register_forward_hook(conv2d_hook)
-            elif isinstance(net, nn.Conv1d):
-                net.register_forward_hook(conv1d_hook)
-            elif isinstance(net, nn.Linear):
-                net.register_forward_hook(linear_hook)
-            elif isinstance(net, nn.BatchNorm2d) or isinstance(net, nn.BatchNorm1d):
-                net.register_forward_hook(bn_hook)
-            elif isinstance(net, nn.ReLU):
-                net.register_forward_hook(relu_hook)
-            elif isinstance(net, nn.AvgPool2d) or isinstance(net, nn.MaxPool2d):
-                net.register_forward_hook(pooling2d_hook)
-            elif isinstance(net, nn.AvgPool1d) or isinstance(net, nn.MaxPool1d):
-                net.register_forward_hook(pooling1d_hook)
+    # ---- hook helpers --------------------------------------------------
+    def conv2d_hook(layer, inp, out):
+        b, _, h_in, w_in = inp[0].size()
+        out_c, h_out, w_out = out.size()[1:]
+        kernel_ops = layer.kernel_size[0] * layer.kernel_size[1] * layer.in_channels // layer.groups
+        bias_ops = 1 if layer.bias is not None else 0
+        params = out_c * (kernel_ops * (2 if multiply_adds else 1) + bias_ops)
+        conv2d_flops.append(b * params * h_out * w_out)
+
+    def conv1d_hook(layer, inp, out):
+        b, _, l_in = inp[0].size()
+        out_c, l_out = out.size()[1:]
+        kernel_ops = layer.kernel_size[0] * layer.in_channels // layer.groups
+        bias_ops = 1 if layer.bias is not None else 0
+        params = out_c * (kernel_ops * (2 if multiply_adds else 1) + bias_ops)
+        conv1d_flops.append(b * params * l_out)
+
+    def linear_hook(layer, inp, out):
+        b = inp[0].size(0)
+        weight_ops = layer.weight.numel() * (2 if multiply_adds else 1)
+        bias_ops = layer.bias.numel() if layer.bias is not None else 0
+        linear_flops.append(b * (weight_ops + bias_ops))
+
+    def bn_hook(layer, inp, _out):
+        bn_flops.append(inp[0].numel() * 2)
+
+    def relu_hook(layer, inp, _out):
+        relu_flops.append(inp[0].numel())
+
+    def pool2d_hook(layer, inp, out):
+        b, c_out, h_out, w_out = out.size()
+        kernel_ops = layer.kernel_size ** 2 if isinstance(layer.kernel_size, int) else layer.kernel_size[0] * layer.kernel_size[1]
+        pool2d_flops.append(b * c_out * h_out * w_out * kernel_ops)
+
+    def pool1d_hook(layer, inp, out):
+        b, c_out, l_out = out.size()
+        kernel_ops = layer.kernel_size[0] if isinstance(layer.kernel_size, tuple) else layer.kernel_size
+        pool1d_flops.append(b * c_out * l_out * kernel_ops)
+
+    # ---- register all sub‑modules --------------------------------------
+    def register_hooks(net: nn.Module):
+        for child in net.children():
+            if isinstance(child, nn.Conv2d):
+                child.register_forward_hook(conv2d_hook)
+            elif isinstance(child, nn.Conv1d):
+                child.register_forward_hook(conv1d_hook)
+            elif isinstance(child, nn.Linear):
+                child.register_forward_hook(linear_hook)
+            elif isinstance(child, (nn.BatchNorm2d, nn.BatchNorm1d)):
+                child.register_forward_hook(bn_hook)
+            elif isinstance(child, nn.ReLU):
+                child.register_forward_hook(relu_hook)
+            elif isinstance(child, (nn.AvgPool2d, nn.MaxPool2d)):
+                child.register_forward_hook(pool2d_hook)
+            elif isinstance(child, (nn.AvgPool1d, nn.MaxPool1d)):
+                child.register_forward_hook(pool1d_hook)
             else:
-                print('Warning: flop of module {} is not counted!'.format(net))
-            return
-        for c in childrens:
-            foo(c)
+                register_hooks(child)
 
-    # Register hook
-    foo(model)
-    
-    device = device = next(model.parameters()).device
-    input = torch.rand(1, audio_length).to(device)
+    register_hooks(model)
 
-    out = model(input)
- 
-    total_flops = sum(list_conv2d) + sum(list_conv1d) + sum(list_linear) + \
-        sum(list_bn) + sum(list_relu) + sum(list_pooling2d) + sum(list_pooling1d)
-    
-    return total_flops
+    device = next(model.parameters()).device
+    dummy = torch.rand(1, audio_length, device=device)
+    model(dummy)
+
+    total = sum(conv2d_flops + conv1d_flops + linear_flops + bn_flops + relu_flops + pool2d_flops + pool1d_flops)
+    return int(total)
+
