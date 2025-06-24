@@ -4,21 +4,21 @@ set -e
 echo "📁 Ensuring models directory…"
 mkdir -p models
 
-# Dump the raw URL for sanity
-echo "Raw STAGE1_URL = |$STAGE1_URL|"
+# Clean and show Stage1 URL
+URL1=$(printf '%s' "$STAGE1_URL" | tr -d '\r\n')
+echo "Raw Stage1 URL (trimmed) = |$URL1|"
 
-# Download Stage1
 echo "⏬ Fetching Stage1 model…"
-curl -fSL -o models/stage1_engine_detector.pth "$STAGE1_URL" \
+curl -fSL -o models/stage1_engine_detector.pth "$URL1" \
   || { echo "❌ Stage1 download failed"; exit 1; }
 echo "✅ Stage1 downloaded"
 
-# Dump Stage2 URL
-echo "Raw STAGE2_URL = |$STAGE2_URL|"
+# Clean and show Stage2 URL
+URL2=$(printf '%s' "$STAGE2_URL" | tr -d '\r\n')
+echo "Raw Stage2 URL (trimmed) = |$URL2|"
 
-# Download Stage2
 echo "⏬ Fetching Stage2 model…"
-curl -fSL -o models/panns_cnn14_checklist_best_aug.pth "$STAGE2_URL" \
+curl -fSL -o models/panns_cnn14_checklist_best_aug.pth "$URL2" \
   || { echo "❌ Stage2 download failed"; exit 1; }
 echo "✅ Stage2 downloaded"
 
