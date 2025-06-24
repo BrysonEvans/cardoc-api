@@ -1,28 +1,31 @@
 # Dockerfile — CarDoc AI
-FROM python:3.11.5-slim
+FROM python:3.11-slim
 
-#  Avoid .pyc, buffer logs, skip pip version check
+# Don’t write .pyc, buffer stdout/stderr
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
 
-# 1) System deps for ffmpeg (audio) + curl (optional)
+# 1) Install system deps (including gcc, make, TA-Lib headers, ffmpeg, curl)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-      ffmpeg curl && \
+      build-essential \
+      libta-lib-dev \
+      ffmpeg \
+      curl && \
     rm -rf /var/lib/apt/lists/*
 
-# 2) Python deps
+# 2) Install Python deps
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 3) Copy your entire app (models/, weights will be created at runtime)
+# 3) Copy app code
 COPY . .
 
-# 4) Expose your port (Render will still use $PORT)
+# 4) Expose Flask port
 EXPOSE 5050
 
-# 5) Use our entrypoint to fetch weights then start Gunicorn
-ENTRYPOINT ["./start.sh"]
+# 5) Runtime entrypoint
+CMD ["gunicorn", "-k", "gevent", "-w", "4", "-b", "0.0.0.0:$PORT", "app:app"]
