@@ -1,15 +1,24 @@
-# requirements.txt  (add the two lines ↓)
+# Your existing lines...
+eventkit==1.0.3
+ib-insync==0.9.86
+nest-asyncio==1.6.0
+numpy==2.2.1
+pandas==2.2.3
+python-dateutil==2.9.0.post0
+pytube==15.0.0
+pytz==2024.2
+six==1.17.0
+ta-lib==0.6.1
+tzdata==2024.2
 
-flask==3.0.3
-flask-cors==4.0.0
-flask-limiter==3.5.0        # rate-limit
-gunicorn==21.2.0
-gevent==23.9.1              # async worker class
-python-dotenv==1.0.0
-
-openai==1.30.4              # needs httpx ≤ 0.26
-httpx==0.26.0               # pin to keep “proxies” kwarg
-
-torch==2.3.0
-torchaudio==2.3.0
-numpy==1.26.4               # torchaudio/kaldi needs it
+# CarDoc API dependencies
+flask>=3.0.0
+flask-cors>=4.0.0
+flask-limiter>=3.5.0
+gunicorn>=21.0
+gevent>=23.0
+torch>=2.3.0
+torchaudio>=2.3.0
+openai>=1.30.0
+python-dotenv>=1.0.0
+matplotlib>=3.7.1
