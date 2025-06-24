@@ -1,2 +1,8 @@
-# ignore old weight files in git, but allow the models/ folder to be copied
-weights/*.pth
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+.env
+.idea/
+.git/
