@@ -1,17 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# remove stray new-lines / spaces from the two URLs
-STAGE1_URL="$(printf %s "$STAGE1_URL" | tr -d '\r\n[:space:]')"
-STAGE2_URL="$(printf %s "$STAGE2_URL" | tr -d '\r\n[:space:]')"
-
+# ───────── ensure weight directory ─────────
 mkdir -p weights
 
-echo "⏬  Downloading STAGE1 model…"
-curl -fSL "$STAGE1_URL" -o weights/stage1_engine_detector.pth
+download() {
+  local name="$1" url="$2" dst="$3"
+  echo "⏬  Downloading ${name} …"
+  for i in {1..3}; do
+      if curl -fL --progress-bar "${url}" -o "${dst}"; then
+          echo "✅  ${name} saved"
+          return 0
+      fi
+      echo "⚠️   attempt ${i} failed for ${url}"
+      sleep 2
+  done
+  echo "❌  giving up on ${url}"
+  exit 1
+}
 
-echo "⏬  Downloading STAGE2 model…"
-curl -fSL "$STAGE2_URL" -o weights/panns_cnn14_checklist_best_aug.pth
+# URLs must be supplied via Render “Environment Variables”
+download "STAGE1 model" "${STAGE1_URL}" "weights/stage1_engine_detector.pth"
+download "STAGE2 model" "${STAGE2_URL}" "weights/panns_cnn14_checklist_best_aug.pth"
 
+# ───────── launch server ─────────
 echo "🚀  Starting Gunicorn…"
-exec gunicorn -k gevent -w 4 -b "0.0.0.0:${PORT:-10000}" app:app
+exec gunicorn -k gevent -w 4 -b 0.0.0.0:"${PORT:-10000}" app:app
