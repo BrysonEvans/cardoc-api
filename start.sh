@@ -1,16 +1,38 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-# ensure weights dir
+# 1) sanity check
+if [ -z "${STAGE1_URL-}" ] || [ -z "${STAGE2_URL-}" ]; then
+  echo "❌ You must set both STAGE1_URL and STAGE2_URL env vars"
+  exit 1
+fi
+
+echo "→ STAGE1_URL=$STAGE1_URL"
+echo "→ STAGE2_URL=$STAGE2_URL"
+
+# 2) download into weights/
 mkdir -p weights
 
-# download only if missing
-if [ ! -f weights/stage1_engine_detector.pth ]; then
-  curl -fsSL "$STAGE1_URL" -o weights/stage1_engine_detector.pth
-fi
-if [ ! -f weights/panns_cnn14_checklist_best_aug.pth ]; then
-  curl -fsSL "$STAGE2_URL" -o weights/panns_cnn14_checklist_best_aug.pth
-fi
+# a tiny wrapper to retry on failure
+download() {
+  local url=$1 dest=$2
+  for i in 1 2 3; do
+    if curl --fail --location --retry 3 --retry-delay 2 \
+            --output "$dest" \
+            "$url"; then
+      echo "✅ downloaded $dest"
+      return 0
+    else
+      echo "⚠️  attempt $i failed for $url"
+      sleep 1
+    fi
+  done
+  echo "❌ giving up on $url"
+  exit 1
+}
 
-# launch under Gunicorn + Gevent on $PORT
-exec gunicorn -k gevent -w 4 -b 0.0.0.0:$PORT app:app
+download "$STAGE1_URL" weights/stage1_engine_detector.pth
+download "$STAGE2_URL" weights/panns_cnn14_checklist_best_aug.pth
+
+# 3) launch your app
+exec gunicorn -k gevent -w 4 -b "0.0.0.0:${PORT:-5050}" app:app
