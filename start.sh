@@ -1,27 +1,22 @@
-#!/bin/sh
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-# 1) Create weights folder
-mkdir -p /app/weights
+echo "📁 Ensuring models directory & downloading via Python…"
+mkdir -p models
 
-# 2) Download the .pth files into /app/weights via Python
-python - <<'PYCODE'
-import os, sys
-from urllib import request
-
-targets = [
-  ("stage1_engine_detector.pth",  os.environ.get("STAGE1_URL")),
-  ("panns_cnn14_checklist_best_aug.pth", os.environ.get("STAGE2_URL")),
-]
-for fname, url in targets:
+python3 <<'PYCODE'
+import os, urllib.request
+for name,url,fn in [
+    ("STAGE1", os.getenv("STAGE1_URL"), "models/stage1_engine_detector.pth"),
+    ("STAGE2", os.getenv("STAGE2_URL"), "models/panns_cnn14_checklist_best_aug.pth")
+]:
     if not url:
-        sys.exit(f"❌ {fname}: missing URL in environment")
-    out = f"/app/weights/{fname}"
-    print("Downloading", fname, "…")
-    request.urlretrieve(url, out)
-    print("✅", fname, "saved")
+        echo "❌ $name URL missing" >&2
+        exit(1)
+    print(f"⏬ Downloading {name} model…")
+    urllib.request.urlretrieve(url, fn)
+    print("✅ saved", fn)
 PYCODE
 
-# 3) Launch Gunicorn on $PORT (fallback to 5050)
-PORT=${PORT:-5050}
-exec gunicorn -k gevent -w 4 -b 0.0.0.0:"$PORT" app:app
+echo "🚀 Starting Gunicorn…"
+exec gunicorn -k gevent -w 4 -b 0.0.0.0:5050 app:app
