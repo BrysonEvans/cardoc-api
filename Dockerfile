@@ -1,34 +1,44 @@
 # Dockerfile — CarDoc AI API
 FROM python:3.11-slim
 
-# Don’t write .pyc files; unbuffered stdout/stderr
+# avoid .pyc, unbuffer stdout/stderr
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
 
-# 1) Install system deps for ta-lib, ffmpeg, curl
-RUN apt-get update \
- && apt-get install -y --no-install-recommends \
+# 1) System deps: build TA-Lib C lib, ffmpeg, curl, python headers, etc.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
       build-essential \
-      python3-dev \
-      libta-lib0-dev \
+      wget \
+      ca-certificates \
       ffmpeg \
       curl \
- && rm -rf /var/lib/apt/lists/*
+      python3-dev \
+      libatlas-base-dev && \
+    rm -rf /var/lib/apt/lists/*
 
-# 2) Copy & install Python deps
+# 2) Download & compile TA-Lib (0.4.0)
+RUN wget -qO- https://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz \
+    | tar xz && \
+    cd ta-lib && \
+    ./configure --prefix=/usr && \
+    make && make install && \
+    cd .. && rm -rf ta-lib ta-lib-0.4.0-src.tar.gz
+
+# 3) Copy & install Python deps
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# 3) Copy your application code
+# 4) Copy app + helper scripts
 COPY . .
 
-# 4) Download-helper + startup script
+# 5) Downloader + entrypoint
 COPY download_models.py start.sh /app/
 RUN chmod +x /app/start.sh
 
-# 5) Expose port & set entrypoint
+# 6) Expose & run
 EXPOSE 10000
 ENTRYPOINT ["./start.sh"]
