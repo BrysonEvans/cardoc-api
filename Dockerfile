@@ -1,26 +1,23 @@
-# ------------ 1) Base image ----------------------------------------------------
-FROM python:3.11.5-slim
+# ---------- 1) base image ----------
+FROM python:3.11.5-slim AS build
 
-# ------------ 2) System packages ----------------------------------------------
-# ffmpeg   : we resample / mono-convert uploads
-# curl     : start.sh pulls model weights at runtime
-# libsndfile1 : required by python-soundfile (librosa backend)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        ffmpeg \
-        curl \
-        libsndfile1 && \
-    rm -rf /var/lib/apt/lists/*
-
-# ------------ 3) Copy & install Python deps ------------------------------------
 WORKDIR /app
+
+# ---------- 2) system & python deps ----------
+# - ffmpeg for audio transcoding
+# - curl to fetch the model weights at runtime
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ffmpeg curl \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ------------ 4) Copy application code -----------------------------------------
+# ---------- 3) copy source & entrypoint ----------
 COPY . .
-RUN chmod +x /start.sh          # make the entry script executable
+COPY start.sh /start.sh     # <── explicit copy
+RUN chmod +x /start.sh
 
-# ------------ 5) Runtime configuration -----------------------------------------
-ENV PYTHONUNBUFFERED=1
-CMD ["/start.sh"]
+# ---------- 4) container start command ----------
+ENTRYPOINT ["/start.sh"]
