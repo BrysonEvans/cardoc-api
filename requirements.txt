@@ -1,13 +1,20 @@
+# core app
 flask==3.0.3
 flask-cors==4.0.0
 python-dotenv==1.0.0
+openai==1.30.4
+
+# ML
 torch==2.3.0
 torchaudio==2.3.0
-openai==1.30.4
-gunicorn==21.2.0
-gevent==23.9.1
 torchlibrosa==0.0.4
 librosa==0.10.2.post1
-matplotlib
-tqdm
-scikit-learn      # whatever else you need
+
+# utilities
+matplotlib==3.9.0
+numpy==1.26.4
+scipy==1.16.0
+
+# prod serving
+gunicorn==21.2.0
+gevent==23.9.1

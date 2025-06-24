@@ -1,23 +1,32 @@
-# ---------- 1) base image ----------
-FROM python:3.11.5-slim AS build
+# ───────── Base image ─────────
+FROM python:3.11.5-slim
 
+# ───────── Workdir ─────────
 WORKDIR /app
 
-# ---------- 2) system & python deps ----------
-# - ffmpeg for audio transcoding
-# - curl to fetch the model weights at runtime
+# ───────── OS-level deps ─────────
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      ffmpeg curl \
+      ffmpeg \
+      curl \
  && rm -rf /var/lib/apt/lists/*
 
+# ───────── Python deps (layer cached) ─────────
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ---------- 3) copy source & entrypoint ----------
+# ───────── Application source ─────────
 COPY . .
-COPY start.sh /start.sh     # <── explicit copy
+
+# copy entry script separately & make it executable
+COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
-# ---------- 4) container start command ----------
+# ───────── Runtime env ─────────
+ENV PYTHONUNBUFFERED=1 \
+    PORT=10000               # Render will override with $PORT
+
+EXPOSE 10000
+
+# ───────── Entrypoint ─────────
 ENTRYPOINT ["/start.sh"]

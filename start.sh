@@ -1,14 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ------------ download weights once -----------------
-mkdir -p weights
+echo "📁  Ensuring weights directory…"
+mkdir -p /app/weights
 
-echo "⏬  Downloading STAGE1 model…"
-curl -fsSL "$STAGE1_URL" -o weights/stage1_engine_detector.pth
+download() {
+  local url="$1"
+  local dest="$2"
 
-echo "⏬  Downloading STAGE2 model…"
-curl -fsSL "$STAGE2_URL" -o weights/panns_cnn14_checklist_best_aug.pth
+  if [[ -z "$url" ]]; then
+    echo "❌  Environment variable for $(basename "$dest") not set"; exit 1
+  fi
+
+  echo "⏬  Downloading $(basename "$dest")…"
+  curl -fL --retry 3 --retry-delay 2 "$url" -o "$dest"
+}
+
+download "${STAGE1_URL:-}" "/app/weights/stage1_engine_detector.pth"
+download "${STAGE2_URL:-}" "/app/weights/panns_cnn14_checklist_best_aug.pth"
 
 echo "🚀  Starting Gunicorn…"
-exec gunicorn -k gevent -w 4 -b 0.0.0.0:"${PORT:-10000}" app:app
+exec gunicorn -k gevent -w 4 -b 0.0.0.0:"${PORT}" app:app
