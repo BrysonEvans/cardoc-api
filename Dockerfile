@@ -1,29 +1,39 @@
-# Use the exact Python slim image to match your local environment
-FROM python:3.11-slim
+# ── Step 0: pick a reproducible base ─────────────────────────────
+FROM python:3.11.5-slim
 
-# Don’t write .pyc files & buffer logs to stdout/stderr
+# ── Step 1: env tweaks & workdir ────────────────────────────────
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
 
-# 1) Install only the system packages you need at runtime
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+# ── Step 2: install system deps ─────────────────────────────────
+#   build-essential + python3-dev for any wheels, libta-lib-dev for TA-Lib,
+#   ffmpeg for audio, curl so we can download at runtime
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      build-essential \
+      python3-dev \
+      libta-lib-dev \
+      libatlas-base-dev \
       ffmpeg \
-      curl && \
-    rm -rf /var/lib/apt/lists/*
+      curl \
+ && rm -rf /var/lib/apt/lists/*
 
-# 2) Copy & install your Python dependencies
+# ── Step 3: install Python deps ─────────────────────────────────
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install -r requirements.txt
 
-# 3) Copy your entire app code
+# ── Step 4: copy your entire app ────────────────────────────────
 COPY . .
 
-# 4) Copy & make your startup script executable
+# ── Step 5: add startup script ──────────────────────────────────
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
-# 5) At runtime, start.sh will download the models and launch Gunicorn
-ENTRYPOINT ["/start.sh"]
+# ── Step 6: tell Docker (and Render) which port we serve on ─────
+EXPOSE 5050
+
+# ── Final: hand off to our script ───────────────────────────────
+CMD ["/start.sh"]
