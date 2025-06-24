@@ -1,29 +1,26 @@
-# 1) Base
-FROM python:3.11-slim
-
-# 2) Prevent .pyc, buffer logs
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+FROM python:3.11.5-slim
 
 WORKDIR /app
 
-# 3) System deps (audio libs, build tools, curl)
-RUN apt-get update \
- && apt-get install -y --no-install-recommends \
-       build-essential \
-       python3-dev \
-       libsndfile1-dev \
-       ffmpeg \
-       curl \
- && rm -rf /var/lib/apt/lists/*
+# 1) Install system deps
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      build-essential \
+      python3-dev \
+      libatlas-base-dev \
+      ffmpeg \
+      curl && \
+    rm -rf /var/lib/apt/lists/*
 
-# 4) Python deps
+# 2) Copy & install Python deps
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5) App code + launch script
+# 3) Copy code + startup script
 COPY . .
-RUN chmod +x start.sh
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
 
-# 6) Entrypoint
-CMD ["./start.sh"]
+# 4) Expose & launch
+EXPOSE 5050
+CMD ["/start.sh"]
