@@ -1,10 +1,20 @@
+# ───────────────────────── Core web stack ─────────────────────────
 flask==3.0.3
 flask-cors==4.0.0
 python-dotenv==1.0.0
-torch==2.3.0
-torchaudio==2.3.0
-torchlibrosa==0.0.4
-matplotlib
-openai==1.30.4
 gunicorn==21.2.0
 gevent==23.9.1
+
+# ───────────────────────── AI / ML stack ──────────────────────────
+torch==2.3.0
+torchaudio==2.3.0             # matches PyTorch
+torchlibrosa==0.0.4           # audio features used by Stage-2 model
+numpy==1.26.4                 # pinned to the wheels PyTorch ships against
+matplotlib==3.9.0             # used inside cnn14.py for debugging
+
+# ──────────────────────── OpenAI integration ──────────────────────
+openai==1.30.4
+
+# ──────────────────────── NEW audio deps (fix) ────────────────────
+librosa==0.10.2.post1         # imported by torchlibrosa.stft
+soundfile==0.12.1             # librosa backend — pure-Python but needs libsndfile1 .so
