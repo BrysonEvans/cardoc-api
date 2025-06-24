@@ -1,3 +1,4 @@
+matplotlib
 flask==3.0.3
 flask-cors==4.0.0
 python-dotenv==1.0.0
@@ -6,4 +7,3 @@ torchaudio==2.3.0
 openai==1.30.4
 gunicorn==21.2.0
 gevent==23.9.1
-matplotlib
