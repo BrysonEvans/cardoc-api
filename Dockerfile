@@ -1,34 +1,29 @@
-# Use the exact base to match your local env
-FROM python:3.11.5-slim
+# 1) Base
+FROM python:3.11-slim
 
-# Don’t write .pyc files, buffer stdout/stderr
+# 2) Prevent .pyc, buffer logs
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# 1) Install only what we need at runtime
+# 3) System deps (audio libs, build tools, curl)
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      ffmpeg \
-      curl \
+       build-essential \
+       python3-dev \
+       libsndfile1-dev \
+       ffmpeg \
+       curl \
  && rm -rf /var/lib/apt/lists/*
 
-# 2) Install Python dependencies
+# 4) Python deps
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 3) Copy downloader and startup script
-COPY download_models.py start.sh ./
-RUN chmod +x download_models.py start.sh
-
-# 4) Ensure the weights directory exists
-RUN mkdir -p /app/weights
-
-# 5) Copy the rest of your app
+# 5) App code + launch script
 COPY . .
+RUN chmod +x start.sh
 
-# 6) Expose your app port and launch
-EXPOSE 5050
-ENTRYPOINT ["./start.sh"]
+# 6) Entrypoint
+CMD ["./start.sh"]
