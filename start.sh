@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -e
 
-echo "📁 Ensuring weights directory…"
-mkdir -p /app/weights
+# ensure weights dir
+mkdir -p weights
 
-: "${STAGE1_URL:?STAGE1_URL must be set}"
-: "${STAGE2_URL:?STAGE2_URL must be set}"
+# download only if missing
+if [ ! -f weights/stage1_engine_detector.pth ]; then
+  curl -fsSL "$STAGE1_URL" -o weights/stage1_engine_detector.pth
+fi
+if [ ! -f weights/panns_cnn14_checklist_best_aug.pth ]; then
+  curl -fsSL "$STAGE2_URL" -o weights/panns_cnn14_checklist_best_aug.pth
+fi
 
-echo "⏬ Downloading STAGE1 model…"
-python download_models.py --url "$STAGE1_URL" --out weights/stage1_engine_detector.pth
-
-echo "⏬ Downloading STAGE2 model…"
-python download_models.py --url "$STAGE2_URL" --out weights/panns_cnn14_checklist_best_aug.pth
-
-echo "🚀 Starting Gunicorn…"
-exec gunicorn -k gevent -w 4 -b "0.0.0.0:${PORT:-5050}" app:app
+# launch under Gunicorn + Gevent on $PORT
+exec gunicorn -k gevent -w 4 -b 0.0.0.0:$PORT app:app

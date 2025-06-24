@@ -3,8 +3,8 @@ flask-cors==4.0.0
 python-dotenv==1.0.0
 torch==2.3.0
 torchaudio==2.3.0
+torchlibrosa==0.0.4
+matplotlib
 openai==1.30.4
 gunicorn==21.2.0
 gevent==23.9.1
-matplotlib
-# …any others your app needs…
