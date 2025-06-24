@@ -1,3 +1,2 @@
-models/
-*.pth
-*.url
+# ignore old weight files in git, but allow the models/ folder to be copied
+weights/*.pth
