@@ -1,18 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "→ STAGE1_URL is: [$STAGE1_URL]"
-echo "→ STAGE2_URL is: [$STAGE2_URL]"
+echo "📁 Ensuring weights directory…"
+mkdir -p weights
 
-mkdir -p /app/weights
+echo "⏬ Downloading STAGE1 model…"
+curl -fSL --retry 3 "$STAGE1_URL" -o weights/stage1_engine_detector.pth
 
-# the critical change is the quotes around "$STAGE?_URL"
-curl -fSL "$STAGE1_URL" -o /app/weights/stage1_engine_detector.pth \
-  || { echo "❌ giving up on $STAGE1_URL"; exit 1; }
-echo "✅ stage1_engine_detector.pth saved"
+echo "⏬ Downloading STAGE2 model…"
+curl -fSL --retry 3 "$STAGE2_URL" -o weights/panns_cnn14_checklist_best_aug.pth
 
-curl -fSL "$STAGE2_URL" -o /app/weights/panns_cnn14_checklist_best_aug.pth \
-  || { echo "❌ giving up on $STAGE2_URL"; exit 1; }
-echo "✅ panns_cnn14_checklist_best_aug.pth saved"
-
-exec gunicorn -k gevent -w 4 -b 0.0.0.0:"${PORT:-5050}" app:app
+echo "🚀 Starting Gunicorn…"
+exec gunicorn -k gevent -w 4 -b 0.0.0.0:"${PORT}" app:app
