@@ -24,7 +24,7 @@ RUN chmod +x /start.sh
 
 # ───────── Runtime env ─────────
 ENV PYTHONUNBUFFERED=1 \
-    PORT=10000           # (Render will still inject its own $PORT)
+    PORT=10000           
 
 EXPOSE 10000
 
