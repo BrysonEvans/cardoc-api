@@ -1,28 +1,24 @@
 #!/usr/bin/env sh
-set -e
+set -ex
 
 echo "📁 Ensuring models directory…"
 mkdir -p models
 
-# ========== Stage1 ==========
-echo "⏬ Downloading Stage1 model from:"
-echo "   $STAGE1_URL"
-if curl -fSL -o models/stage1_engine_detector.pth "$STAGE1_URL"; then
-  echo "✅ Stage1 model downloaded"
-else
-  echo "❌ ERROR: Stage1 download failed"
-  exit 1
-fi
+# Dump out exactly what Curl will see
+echo "Raw STAGE1_URL = |$STAGE1_URL|"
 
-# ========== Stage2 ==========
-echo "⏬ Downloading Stage2 model from:"
-echo "   $STAGE2_URL"
-if curl -fSL -o models/panns_cnn14_checklist_best_aug.pth "$STAGE2_URL"; then
-  echo "✅ Stage2 model downloaded"
-else
-  echo "❌ ERROR: Stage2 download failed"
-  exit 1
-fi
+# Attempt Stage1 download
+echo "⏬ Curl command:"
+echo "  curl -fSL -o models/stage1_engine_detector.pth \"$STAGE1_URL\""
+curl -fSL -o models/stage1_engine_detector.pth "$STAGE1_URL"
+echo "✅ Stage1 model downloaded"
+
+# Dump Stage2 too
+echo "Raw STAGE2_URL = |$STAGE2_URL|"
+echo "⏬ Curl command:"
+echo "  curl -fSL -o models/panns_cnn14_checklist_best_aug.pth \"$STAGE2_URL\""
+curl -fSL -o models/panns_cnn14_checklist_best_aug.pth "$STAGE2_URL"
+echo "✅ Stage2 model downloaded"
 
 echo "🚀 Starting Gunicorn…"
 exec gunicorn app:app \
