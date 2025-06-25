@@ -1,8 +1,22 @@
-# .gitignore
+# macOS cruft
 .DS_Store
+
+# Model weights (large / local only)
 weights/
+*.pth               # PyTorch checkpoints
+*.h5                # Keras / HDF5
+*.keras             # Keras SavedModel
+*.tflite            # TensorFlow Lite
+
+# Python cache
 __pycache__/
-*.pth
-*.h5
-*.keras
-*.tflite
+
+# ────────────────────────────────────────────────
+# Project-specific ignores
+# ────────────────────────────────────────────────
+
+# Local mixer experiment folders (e.g., mixer_v8/, mixer_v9/, mixer_v10/)
+models/mixer_v*/
+
+# Presigned-URL files used by download_models.py
+presign_stage*.url
