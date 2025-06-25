@@ -6,8 +6,8 @@ openai==1.30.4
 pandas
 
 # ML
-torch==2.5.1
-torchaudio==2.5.1
+torch==2.6.0
+torchaudio==2.6.0
 torchlibrosa==0.0.4
 librosa==0.10.2.post1
 
