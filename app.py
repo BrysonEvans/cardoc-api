@@ -16,7 +16,7 @@ sys.path.insert(0, "/app")
 
 import torch, torchaudio
 from stage1_model import Stage1EngineDetector
-from pannsupgraded import PannsChecklist
+from panns_infer import PannsChecklist
 from openai import OpenAI, OpenAIError
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
