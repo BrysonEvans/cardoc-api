@@ -1,23 +1,46 @@
 #!/usr/bin/env python3
-import argparse
-import sys
+"""
+download_models.py  –  runs during Render build
+
+• Downloads each weight file only if it's missing
+• Uses permanent GitHub-Release URLs (no expiry, 2 GB limit)
+• Writes to /var/models/weights so the persistent disk caches them
+"""
+from pathlib import Path
 from urllib.request import urlopen, Request
+import sys
 
-def main():
-    p = argparse.ArgumentParser(
-        description="Fetch a presigned URL into a local file"
-    )
-    p.add_argument("--url",  required=True, help="Presigned S3 URL")
-    p.add_argument("--out",  required=True, help="Local output path")
-    args = p.parse_args()
+# ── destination directory (attached disk in render.yaml) ──────────────
+W_DIR = Path("/var/models/weights")
 
-    req = Request(args.url, headers={"User-Agent": "curl/7.68.0"})
+# ── permanent asset URLs from the weights-v1 GitHub release ───────────
+FILES = {
+    "stage1_engine_detector.pth":
+        "https://github.com/BrysonEvans/cardoc-api/releases/download/weights-v1/stage1_engine_detector.pth",
+    "panns_cnn14_checklist_best_aug.pth":
+        "https://github.com/BrysonEvans/cardoc-api/releases/download/weights-v1/panns_cnn14_checklist_best_aug.pth",
+}
+
+def fetch(url: str, dst: Path) -> None:
+    req = Request(url, headers={"User-Agent": "curl/7.68.0"})
     try:
-        with urlopen(req) as resp, open(args.out, "wb") as f:
+        with urlopen(req) as resp, open(dst, "wb") as f:
             f.write(resp.read())
     except Exception as e:
-        sys.stderr.write(f"❌ Download failed: {e}\n")
+        sys.stderr.write(f"❌ download failed for {dst.name}: {e}\n")
         sys.exit(1)
+
+def main() -> None:
+    for name, url in FILES.items():
+        dst = W_DIR / name
+        if dst.exists():
+            print(f"✓ {name} already present – skipping")
+            continue
+
+        W_DIR.mkdir(parents=True, exist_ok=True)
+        print(f"⬇️  downloading {name} …", flush=True)
+        fetch(url, dst)
+        print(f"✅  {name} ready ({dst.stat().st_size/1_048_576:.1f} MB)")
 
 if __name__ == "__main__":
     main()
