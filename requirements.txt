@@ -8,7 +8,7 @@ pandas==2.3.0
 # ML
 torch==2.6.0
 torchaudio==2.6.0
-torchlibrosa==0.1.0
+torchlibrosa==0.1.0            # ← 0.1.0 is the Py-3.12 compatible build
 
 # utilities
 matplotlib==3.9.0
@@ -17,6 +17,8 @@ scipy==1.13.0
 
 # prod serving
 gunicorn==21.2.0
+gevent==25.5.1                 # ← **add this line**  (latest Py-3.12-ready)
+greenlet>=2.0                  # ← gevent needs a recent greenlet
 
 # networking
-httpx==0.27.0     # ← added line
+httpx==0.27.0                  # already here for openai 1.30.x
