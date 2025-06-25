@@ -1,21 +1,25 @@
+# render.yaml  ── Infrastructure-as-Code for Render
 services:
   - type: web
     name: cardoc-api
     env: python
-    plan: free          # switch to “starter” or higher any time
+    plan: starter        # keep “starter” (2 GB) or higher; “free” will OOM
 
-    # ── Build container (read-only) ─────────────────────────
-    buildCommand: pip install -r requirements.txt
+    # ── Build phase ───────────────────────────────────────────
+    buildCommand: >
+      pip install -r requirements.txt
 
-    # ── Runtime container (disk is mounted) ─────────────────
+    # ── Runtime phase ─────────────────────────────────────────
     startCommand: |
       python download_models.py && \
       gunicorn app:app \
         --bind 0.0.0.0:$PORT \
-        --workers 2 --threads 4 \
-        --timeout 120            # gevent flag removed
+        --workers 2 \
+        --threads 4 \
+        --worker-class gthread \
+        --timeout 120
 
-    # ── Persistent disk for model weights ───────────────────
+    # ── Persistent disk for model checkpoints ────────────────
     disks:
       - name: cardoc-models
         mountPath: /var/models
