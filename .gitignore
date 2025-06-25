@@ -1,6 +1,5 @@
 # .gitignore
 .DS_Store
-models/
 weights/
 __pycache__/
 *.pth
