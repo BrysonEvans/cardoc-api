@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-download_models.py  –  runs every time the runtime container starts
+download_models.py  –  runs at container start
 
 • Downloads each weight file only if it’s missing
-• Uses permanent GitHub-release URLs (no expiry, 2 GB per file limit)
-• Saves to /var/models/weights (a Render persistent disk)
+• Uses permanent GitHub-Release URLs (no expiry, 2 GB/file limit)
+• Writes to /var/models/weights so the persistent disk caches them
 """
 from pathlib import Path
-from urllib.request import Request, urlopen
+from urllib.request import urlopen, Request
 import sys
 
-# ── destination directory on the attached disk ────────────
+# Destination directory (created on the attached Render disk)
 W_DIR = Path("/var/models/weights")
 
-# ── permanent asset URLs from the weights-v1 release ──────
+# Permanent asset URLs from the weights-v1 GitHub release
 FILES = {
     "stage1_engine_detector.pth":
         "https://github.com/BrysonEvans/cardoc-api/releases/download/weights-v1/stage1_engine_detector.pth",
