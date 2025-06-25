@@ -3,6 +3,7 @@ flask==3.0.3
 flask-cors==4.0.0
 python-dotenv==1.0.0
 openai==1.30.4
+pandas
 
 # ML
 torch==2.3.0
@@ -13,7 +14,7 @@ librosa==0.10.2.post1
 # utilities
 matplotlib==3.9.0
 numpy==1.26.4
-scipy==1.16.0
+scipy            # let pip resolve a modern version (≥1.11)
 
 # prod serving
 gunicorn==21.2.0

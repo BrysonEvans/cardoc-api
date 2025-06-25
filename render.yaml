@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: cardoc-api
+    env: python
+    plan: free          # change to 'starter' or higher if you want more RAM later
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --worker-class gevent --timeout 120
+    disks:
+      - name: cardoc-models
+        mountPath: /var/models
