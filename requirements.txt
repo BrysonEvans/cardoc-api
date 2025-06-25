@@ -8,8 +8,7 @@ pandas==2.3.0
 # ML
 torch==2.6.0
 torchaudio==2.6.0
-torchlibrosa==0.0.4
-librosa==0.9.2.post1
+torchlibrosa==0.1.0
 
 # utilities
 matplotlib==3.9.0
