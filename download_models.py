@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 """
-download_models.py  –  runs during Render build
+download_models.py  – executed at each Render deploy
 
-• Downloads each weight file only if it's missing
-• Uses permanent GitHub-Release URLs (no expiry, 2 GB limit)
-• Writes to /var/models/weights so the persistent disk caches them
+▸ If the two weight files aren't yet on the persistent disk
+  (/var/models/weights) they’re fetched from the *GitHub-release*
+  you published (unlimited lifetime, 2 GiB per asset).
+
+▸ If the disk already contains the files they’re skipped, so
+  subsequent deploys are fast and bandwidth-free.
 """
 from pathlib import Path
 from urllib.request import urlopen, Request
-import sys
+import sys, shutil
 
-# ── destination directory (attached disk in render.yaml) ──────────────
+# ── target directory on the mounted Render disk ───────────────────────
 W_DIR = Path("/var/models/weights")
 
-# ── permanent asset URLs from the weights-v1 GitHub release ───────────
+# ── permanent GitHub-release asset URLs (public) ──────────────────────
 FILES = {
     "stage1_engine_detector.pth":
         "https://github.com/BrysonEvans/cardoc-api/releases/download/weights-v1/stage1_engine_detector.pth",
@@ -21,26 +24,29 @@ FILES = {
         "https://github.com/BrysonEvans/cardoc-api/releases/download/weights-v1/panns_cnn14_checklist_best_aug.pth",
 }
 
-def fetch(url: str, dst: Path) -> None:
+# helpers --------------------------------------------------------------
+def download(url: str, dst: Path) -> None:
+    """stream-download *url* → *dst* with a curl-like UA string"""
     req = Request(url, headers={"User-Agent": "curl/7.68.0"})
     try:
         with urlopen(req) as resp, open(dst, "wb") as f:
-            f.write(resp.read())
+            shutil.copyfileobj(resp, f, length=1 << 20)  # 1 MiB chunks
     except Exception as e:
-        sys.stderr.write(f"❌ download failed for {dst.name}: {e}\n")
-        sys.exit(1)
+        sys.exit(f"❌ download failed for {dst.name}: {e}")
 
 def main() -> None:
-    for name, url in FILES.items():
-        dst = W_DIR / name
-        if dst.exists():
-            print(f"✓ {name} already present – skipping")
+    W_DIR.mkdir(parents=True, exist_ok=True)
+
+    for fname, url in FILES.items():
+        path = W_DIR / fname
+        if path.exists():
+            print(f"✓ {fname} already present – skipping")
             continue
 
-        W_DIR.mkdir(parents=True, exist_ok=True)
-        print(f"⬇️  downloading {name} …", flush=True)
-        fetch(url, dst)
-        print(f"✅  {name} ready ({dst.stat().st_size/1_048_576:.1f} MB)")
+        print(f"⬇️  downloading {fname} …", flush=True)
+        download(url, path)
+        size_mb = path.stat().st_size / 1_048_576
+        print(f"✅  {fname} ready ({size_mb:.1f} MB)")
 
 if __name__ == "__main__":
     main()
