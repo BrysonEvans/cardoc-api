@@ -1,23 +1,24 @@
-# ─────────── render.yaml (replace the whole file with this) ───────────
+# ───────── cardoc-api – Render service definition ─────────
 services:
   - type: web
     name: cardoc-api
     env: python
-    plan: free               # bump to “starter” whenever you need more RAM
+    plan: free                  # change to “starter” or higher if you need more RAM
 
-    # Build container (read-only)
-    buildCommand: pip install -r requirements.txt        # installs gunicorn too
+    # ── Build phase (read-only container) ──────────────────
+    buildCommand: pip install -r requirements.txt
 
-    # Runtime container (persistent disk is mounted)
-    startCommand: >
-      python download_models.py &&
-      gunicorn app:app
-      --bind 0.0.0.0:$PORT
-      --workers 2 --threads 4
-      --timeout 120           # **no gevent flag, no back-slashes**
+    # ── Runtime phase (disk is mounted) ───────────────────
+    #   • back-slash continues the line, **no leading spaces**
+    startCommand: |
+      python download_models.py && \
+      gunicorn app:app \
+        --bind 0.0.0.0:$PORT \
+        --workers 2 --threads 4 \
+        --timeout 120
 
-    # Persistent disk for the weight files
+    # ── Persistent disk for the model weights ─────────────
     disks:
       - name: cardoc-models
-        mountPath: /var/models
+        mountPath: /var/models      # download_models.py writes here
         sizeGB: 1
