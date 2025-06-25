@@ -1,2 +1,7 @@
-filepath,alternator_whine,pulley_belt_noise,engine_idle,rod_knock,timing_chain_rattle,silence
-dummy.wav,0,0,0,0,0,0
+filepath,dominant,alternator_whine,pulley_belt_noise,engine_idle,rod_knock,timing_chain_rattle,silence
+aw.wav,alternator_whine,1,0,0,0,0,0
+pbn.wav,pulley_belt_noise,0,1,0,0,0,0
+ei.wav,engine_idle,0,0,1,0,0,0
+rk.wav,rod_knock,0,0,0,1,0,0
+tcr.wav,timing_chain_rattle,0,0,0,0,1,0
+sil.wav,silence,0,0,0,0,0,1
