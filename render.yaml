@@ -1,10 +1,23 @@
 services:
   - type: web
     name: cardoc-api
-    env: python
-    plan: free          # change to 'starter' or higher if you want more RAM later
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --worker-class gevent --timeout 120
+    env: python                     # Render’s Python environment
+    plan: free                      # bump to “starter” later if you need more RAM
+
+    # ── Build phase ───────────────────────────────
+    buildCommand: |
+      python download_models.py     # 1️⃣ fetch weights (skips if cached)
+      pip install -r requirements.txt
+
+    # ── Start phase ───────────────────────────────
+    startCommand: >
+      gunicorn app:app
+      --bind 0.0.0.0:$PORT
+      --worker-class gevent
+      --timeout 120
+
+    # ── Persistent disk for the weights ───────────
     disks:
       - name: cardoc-models
-        mountPath: /var/models
+        mountPath: /var/models      # download_models.py writes here
+        sizeGB: 1                   # 640 MB weights + cushion
