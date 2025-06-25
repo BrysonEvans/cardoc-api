@@ -1,26 +1,29 @@
-# render.yaml  ── Infrastructure-as-Code for Render
+# ─────────────────────────────────────────────────────────────
+#  render.yaml  ─ Cardoc-API deployment blueprint
+# ─────────────────────────────────────────────────────────────
 services:
   - type: web
-    name: cardoc-api
-    env: python
-    plan: starter        # keep “starter” (2 GB) or higher; “free” will OOM
+    name: cardoc-api                          # the Render service name
+    env: python                               # use Render’s Python image
+    plan: free                                # bump to “starter” any time
 
-    # ── Build phase ───────────────────────────────────────────
-    buildCommand: >
+    # ── Build container (read-only filesystem) ──────────────
+    # Install all Python deps; models are *not* downloaded here.
+    buildCommand: |
       pip install -r requirements.txt
 
-    # ── Runtime phase ─────────────────────────────────────────
+    # ── Runtime container (disk is mounted read-write) ──────
+    # 1️⃣ ensure weights exist (skip if already cached)
+    # 2️⃣ start Gunicorn with sync/thread workers (no gevent)
     startCommand: |
       python download_models.py && \
       gunicorn app:app \
         --bind 0.0.0.0:$PORT \
-        --workers 2 \
-        --threads 4 \
-        --worker-class gthread \
+        --workers 2 --threads 4 \
         --timeout 120
 
-    # ── Persistent disk for model checkpoints ────────────────
+    # ── Persistent disk for model checkpoints ───────────────
     disks:
-      - name: cardoc-models
-        mountPath: /var/models
-        sizeGB: 1
+      - name: cardoc-models                 # arbitrary label
+        mountPath: /var/models              # download_models.py writes here
+        sizeGB: 1                           # 640 MB weights + safety margin
