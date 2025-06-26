@@ -11,10 +11,10 @@ services:
 
     # ---------- Runtime (persistent disk is mounted) ----------
     startCommand: |
-      # 1) download weights to /var/models/weights   (no-op if cached)
+      # 1) download weights to /var/models/weights (first run only)
       python3 download_models.py
 
-      # 2) launch the Flask API behind Gunicorn (sync/gthread workers)
+      # 2) launch your Flask API via Gunicorn (sync/gthread workers)
       gunicorn app:app \
         --bind 0.0.0.0:$PORT \
         --workers 2 --threads 4 \
@@ -24,4 +24,4 @@ services:
     disks:
       - name: cardoc-models
         mountPath: /var/models
-        sizeGB: 2   # adjust if you need more
+        sizeGB: 2
