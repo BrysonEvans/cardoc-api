@@ -1,22 +1,36 @@
 # ───────── cardoc-api-2 – Render service definition ─────────
 services:
   - type: web
-    name: cardoc-api-2
+    name: cardoc-api-2          # keep the exact Render name
     env: python
-    plan: starter             # or standard / free
+    plan: starter               # (“free”, “starter”, “standard”… any is fine)
 
+    # ── Build container ─────────────────────────────────────
     buildCommand: |
-      pip install --upgrade pip            # keeps pip warning away
       pip install -r requirements.txt
 
+    # Optional: run the model download during build instead of at runtime.
+    preDeployCommand: |
+      python3 download_models.py   # <-- runs inside the build container
+
+    # ── Runtime container ───────────────────────────────────
     startCommand: |
-      export PATH="$PATH:/opt/render/.local/bin" && \
-      python download_models.py && \
+      # be explicit about Python path & user binaries
+      export PATH="$PATH:/opt/render/.local/bin:/usr/local/bin"
+      #
+      # make sure the persistent disk exists & is writable
+      mkdir -p /var/models/weights
+      #
+      # (NOOP if you already ran it in preDeploy.)
+      python3 download_models.py
+      #
+      # launch the API
       gunicorn app:app \
         --bind 0.0.0.0:$PORT \
         --workers 2 --threads 4 \
-        --timeout 120
+        --timeout 120            # gthread workers (default)
 
+    # ── Persistent disk to cache model weights ──────────────
     disks:
       - name: cardoc-models
         mountPath: /var/models

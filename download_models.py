@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 """
-download_models.py  –  runs at container start
+download_models.py – pulls model weights to /var/models/weights
 
-• Downloads each weight file only if it’s missing
-• Uses permanent GitHub-Release URLs (no expiry, 2 GB/file limit)
-• Writes to /var/models/weights so the persistent disk caches them
+• Downloads each file only if it’s missing
+• Uses permanent GitHub-Release URLs (no expiry)
+• Works in both build- and runtime containers
 """
 from pathlib import Path
 from urllib.request import urlopen, Request
-import sys
+import sys, shutil
 
-# Destination directory (created on the attached Render disk)
-W_DIR = Path("/var/models/weights")
+# ── destination directory on the persistent Render disk ──
+W_DIR = Path("/var/models/weights")          # <── keep in-sync with render.yaml
 
-# Permanent asset URLs from the weights-v1 GitHub release
 FILES = {
     "stage1_engine_detector.pth":
         "https://github.com/BrysonEvans/cardoc-api/releases/download/weights-v1/stage1_engine_detector.pth",
@@ -22,22 +21,21 @@ FILES = {
 }
 
 def fetch(url: str, dst: Path) -> None:
-    req = Request(url, headers={"User-Agent": "curl/7.68.0"})
+    req = Request(url, headers={"User-Agent": "curl/8.0"})
     try:
         with urlopen(req) as resp, open(dst, "wb") as f:
-            f.write(resp.read())
-    except Exception as e:
-        sys.stderr.write(f"❌ download failed for {dst.name}: {e}\n")
+            shutil.copyfileobj(resp, f)
+    except Exception as exc:
+        sys.stderr.write(f"❌ download failed for {dst.name}: {exc}\n")
         sys.exit(1)
 
 def main() -> None:
+    W_DIR.mkdir(parents=True, exist_ok=True)
     for name, url in FILES.items():
         dst = W_DIR / name
         if dst.exists():
             print(f"✓ {name} already present – skipping")
             continue
-
-        W_DIR.mkdir(parents=True, exist_ok=True)
         print(f"⬇️  downloading {name} …", flush=True)
         fetch(url, dst)
         print(f"✅  {name} ready ({dst.stat().st_size/1_048_576:.1f} MB)")
