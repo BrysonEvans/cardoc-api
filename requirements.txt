@@ -1,22 +1,22 @@
-# ─── core app ────────────────────────────────────────────────
+# core app
 flask==3.0.3
 flask-cors==4.0.0
 python-dotenv==1.0.0
 openai==1.30.4
 pandas==2.3.0
 
-# ─── ML ──────────────────────────────────────────────────────
-torch==2.6.0          # CPU build – good enough for Render
+# ML
+torch==2.6.0
 torchaudio==2.6.0
 torchlibrosa==0.1.0
 
-# ─── utilities ───────────────────────────────────────────────
+# utilities
 matplotlib==3.9.0
 numpy==1.26.4
 scipy==1.13.0
 
-# ─── prod serving ────────────────────────────────────────────
-gunicorn==21.2.0       # we’ll use its built-in “gthread” worker
+# prod serving
+gunicorn~=21.2        # <— pinned so the binary is always installed
 
-# ─── networking / misc ───────────────────────────────────────
+# networking
 httpx==0.27.0
