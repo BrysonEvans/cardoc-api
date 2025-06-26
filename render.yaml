@@ -1,24 +1,31 @@
-# ───────── cardoc-api – Render service definition ─────────
+# ───────── cardoc-api-2 – Render service definition ─────────
+
 services:
   - type: web
-    name: cardoc-api
+    name: cardoc-api-2          # keep the service name that Render shows
     env: python
-    plan: starter            # free|starter|standard – pick the one you pay for
+    plan: standard              # “starter”, “standard”, etc. – whatever you use
 
-    # ── Build container (read-only file-system) ────────────
+    # ── Build container (read-only FS) ───────────────────────
     buildCommand: pip install -r requirements.txt
 
-    # ── Runtime container (persistent disk is mounted) ─────
+    # ── Runtime container (disk is mounted) ─────────────────
     startCommand: |
+      # 1) ensure the persistent disk exists and is writable
+      mkdir -p /var/models && \
+      chown -R $(id -u):$(id -g) /var/models && \
+      #
+      # 2) download the missing model files once
       python download_models.py && \
+      #
+      # 3) start the API
       gunicorn app:app \
         --bind 0.0.0.0:$PORT \
-        --workers 2 \
-        --threads 4 \
-        --timeout 120         # **NO gevent flag**
+        --workers 2 --threads 4 \
+        --timeout 120        # gthread worker (default) – no gevent
 
     # ── Persistent disk for model weights ───────────────────
     disks:
-      - name: cardoc-models
-        mountPath: /var/models
-        sizeGB: 1
+      - name: cardoc-models          # existing disk name
+        mountPath: /var/models       # **matches code & chown**
+        sizeGB: 2                    # 1 GB is fine; bump if needed
