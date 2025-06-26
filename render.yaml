@@ -1,27 +1,26 @@
 # ───────── cardoc-api-2 – Render service definition ─────────
 services:
   - type: web
-    name: cardoc-api-2          # must match the service’s UI name
+    name: cardoc-api-2          # keep the exact name Render shows
     env: python
-    plan: standard              # or starter / free
+    plan: standard              # free / starter / standard — any is fine
 
-    # ---------- Build step (read-only FS) ----------
+    # ── Build step (read-only container) ─────────────────────
     buildCommand: |
       pip install -r requirements.txt
-
-    # ---------- Runtime (persistent disk is mounted) ----------
-    startCommand: |
-      # 1) download weights to /var/models/weights (first run only)
+      # optional but faster: download weights during build
       python3 download_models.py
 
-      # 2) launch your Flask API via Gunicorn (sync/gthread workers)
-      gunicorn app:app \
-        --bind 0.0.0.0:$PORT \
-        --workers 2 --threads 4 \
-        --timeout 120
+    # ── Runtime step (disk is mounted) ───────────────────────
+    startCommand: |
+      python3 download_models.py \
+      && gunicorn app:app \
+           --bind 0.0.0.0:$PORT \
+           --workers 2 --threads 4 \
+           --timeout 120        # adjust if needed
 
-    # ---------- Persistent disk for model weights ----------
+    # ── Persistent disk for model weights ────────────────────
     disks:
       - name: cardoc-models
         mountPath: /var/models
-        sizeGB: 2
+        sizeGB: 2               # bump if the two .pth files ever grow
