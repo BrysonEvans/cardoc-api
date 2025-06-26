@@ -1,36 +1,35 @@
 # ───────── cardoc-api-2 – Render service definition ─────────
 services:
   - type: web
-    name: cardoc-api-2          # keep the exact Render name
+    name: cardoc-api-2       # keep the exact name Render shows
     env: python
-    plan: starter               # (“free”, “starter”, “standard”… any is fine)
+    plan: standard           # or starter / free — whatever you use
 
-    # ── Build container ─────────────────────────────────────
+    # ── Build container (read-only FS) ───────────────────────
     buildCommand: |
       pip install -r requirements.txt
 
-    # Optional: run the model download during build instead of at runtime.
-    preDeployCommand: |
-      python3 download_models.py   # <-- runs inside the build container
-
-    # ── Runtime container ───────────────────────────────────
+    # ── Runtime container (disk is mounted) ─────────────────
     startCommand: |
-      # be explicit about Python path & user binaries
+      # be sure the user-level bin dir and system python are visible
       export PATH="$PATH:/opt/render/.local/bin:/usr/local/bin"
-      #
-      # make sure the persistent disk exists & is writable
-      mkdir -p /var/models/weights
-      #
-      # (NOOP if you already ran it in preDeploy.)
+
+      # download missing model files into the persistent disk
       python3 download_models.py
-      #
-      # launch the API
+
+      # start the Flask API behind Gunicorn (sync gthread workers)
       gunicorn app:app \
         --bind 0.0.0.0:$PORT \
         --workers 2 --threads 4 \
-        --timeout 120            # gthread workers (default)
+        --timeout 120        # → change as you wish
 
-    # ── Persistent disk to cache model weights ──────────────
+    # (optional) — if you want Render to fetch weights *before*
+    # it snapshots the image, uncomment the three lines below.
+    # preDeployCommand: |
+    #   export PATH="$PATH:/opt/render/.local/bin:/usr/local/bin"
+    #   python3 download_models.py
+
+    # ── Persistent disk for model weights ───────────────────
     disks:
       - name: cardoc-models
         mountPath: /var/models
