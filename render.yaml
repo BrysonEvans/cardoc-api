@@ -1,33 +1,28 @@
-# ───────── cardoc-api-2 – Render service definition ─────────
+# ───────── cardoc-api-2 — Render service definition ─────────
 services:
   - type: web
-    name: cardoc-api-2          # keep the exact name Render shows
+    name: cardoc-api-2            # must match the service name you see in Render
     env: python
-    plan: standard              # or starter / free — whatever you use
+    plan: standard                # "starter", "free", etc. — leave as-is for your plan
 
-    # ── Build container ─────────────────────────────────────
+    # ── Build container (read-only FS) ──────────────────────
     buildCommand: |
+      pip install --upgrade pip          # optional: quiets the “new pip” notice
       pip install -r requirements.txt
 
-    # ── Runtime container ───────────────────────────────────
+    # ── Pre-Deploy hook (runs once per deploy, before the app starts) ──
+    preDeployCommand: |
+      python download_models.py          # pulls weights into /var/models/weights
+
+    # ── Runtime container (disk is already mounted & writable) ─────────
     startCommand: |
-      # activate Render’s virtual-env so /.venv/bin is on PATH
-      . /.venv/bin/activate
-      #
-      # make sure the persistent disk exists & is writable
-      mkdir -p /var/models && chown -R "$(id -u):$(id -g)" /var/models
-      #
-      # download any missing model weights (no-op if already there)
-      python download_models.py
-      #
-      # start the API server
       gunicorn app:app \
         --bind 0.0.0.0:$PORT \
         --workers 2 --threads 4 \
-        --timeout 120            # gthread workers (default)
+        --timeout 120                    # gthread workers (default)
 
-    # ── Persistent disk for model weights ───────────────────
+    # ── Persistent disk for model weights ──────────────────────────────
     disks:
       - name: cardoc-models
         mountPath: /var/models
-        sizeGB: 2                # 1 GB is fine; bump if you need more
+        sizeGB: 2                        # 1 GB is fine; bump if you need more
