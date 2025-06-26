@@ -1,21 +1,17 @@
+# ───────── cardoc-api-2 – Render service definition ─────────
 services:
   - type: web
-    name: cardoc-api-2        # EXACT service name in Render
+    name: cardoc-api-2
     env: python
-    plan: standard            # or starter/free – keep yours
+    plan: starter             # or standard / free
 
     buildCommand: |
-      pip install --upgrade pip
+      pip install --upgrade pip            # keeps pip warning away
       pip install -r requirements.txt
 
-    preDeployCommand: |
-      python download_models.py          # puts weights into /var/models/weights
-
     startCommand: |
-      # ── activate Render’s v-env so /.venv/bin is on $PATH
-      . /.venv/bin/activate
-      #
-      # start the API
+      export PATH="$PATH:/opt/render/.local/bin" && \
+      python download_models.py && \
       gunicorn app:app \
         --bind 0.0.0.0:$PORT \
         --workers 2 --threads 4 \
