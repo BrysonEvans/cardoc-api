@@ -1,19 +1,22 @@
-# ── cardoc-api – Render service ─────────────────────────────
+# ───────── cardoc-api – Render service definition ─────────
 services:
   - type: web
     name: cardoc-api
-    env: python          # keep whatever plan you need
-    plan: free
+    env: python
+    plan: free          # bump to “starter” or higher any time
 
-    # Install deps in the **build** container
+    # ── Build container (read-only FS) ──────────────────────
     buildCommand: pip install -r requirements.txt
 
-    # Runtime container – weights disk is mounted
-    startCommand: >
-      export PATH=$PATH:/usr/local/python3/bin &&
-      python download_models.py &&
-      gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    # ── Runtime container (disk is mounted) ────────────────
+    startCommand: |
+      python download_models.py && \
+      gunicorn app:app \
+        --bind 0.0.0.0:$PORT \
+        --workers 2 --threads 4 \
+        --timeout 120
 
+    # ── Persistent disk for the model weights ──────────────
     disks:
       - name: cardoc-models
         mountPath: /var/models
