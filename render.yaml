@@ -1,35 +1,27 @@
 # ───────── cardoc-api-2 – Render service definition ─────────
 services:
   - type: web
-    name: cardoc-api-2          # ← must match the name Render shows
+    name: cardoc-api-2          # must match the service’s UI name
     env: python
-    plan: standard              # or starter / free — whatever you use
+    plan: standard              # or starter / free
 
-    # ── Build container (read-only) ──────────────────────────
+    # ---------- Build step (read-only FS) ----------
     buildCommand: |
       pip install -r requirements.txt
 
-    # ── Runtime container (disk is mounted) ─────────────────
+    # ---------- Runtime (persistent disk is mounted) ----------
     startCommand: |
-      # 1) be sure scripts + python are on PATH
-      export PATH="$PATH:/opt/render/.local/bin:/usr/local/python3/bin"
-
-      # 2) download any missing model files into the persistent disk
+      # 1) download weights to /var/models/weights   (no-op if cached)
       python3 download_models.py
 
-      # 3) launch the Flask API behind Gunicorn (sync gthread workers)
+      # 2) launch the Flask API behind Gunicorn (sync/gthread workers)
       gunicorn app:app \
         --bind 0.0.0.0:$PORT \
         --workers 2 --threads 4 \
-        --timeout 120          # adjust if you need longer requests
+        --timeout 120
 
-    # (optional) – fetch the weights during image build instead.
-    # preDeployCommand: |
-    #   export PATH="$PATH:/opt/render/.local/bin:/usr/local/python3/bin"
-    #   python3 download_models.py
-
-    # ── Persistent disk for model weights ───────────────────
+    # ---------- Persistent disk for model weights ----------
     disks:
       - name: cardoc-models
         mountPath: /var/models
-        sizeGB: 2              # 1 GB is fine; bump if you need more
+        sizeGB: 2   # adjust if you need more
