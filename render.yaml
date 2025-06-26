@@ -1,26 +1,24 @@
-# ───────── cardoc-api-2 – Render service definition ─────────
 services:
   - type: web
-    name: cardoc-api-2          # keep the exact name Render shows
+    name: cardoc-api-2
     env: python
-    plan: standard              # free / starter / standard — any is fine
+    plan: standard
 
-    # ── Build step (read-only container) ─────────────────────
     buildCommand: |
       pip install -r requirements.txt
       # optional but faster: download weights during build
       python3 download_models.py
 
-    # ── Runtime step (disk is mounted) ───────────────────────
     startCommand: |
       python3 download_models.py \
       && gunicorn app:app \
            --bind 0.0.0.0:$PORT \
            --workers 2 --threads 4 \
-           --timeout 120        # adjust if needed
+           --timeout 120
 
-    # ── Persistent disk for model weights ────────────────────
+    healthCheckPath: /predict  # ← this fixes the 502 without editing app.py
+
     disks:
       - name: cardoc-models
         mountPath: /var/models
-        sizeGB: 2               # bump if the two .pth files ever grow
+        sizeGB: 2
