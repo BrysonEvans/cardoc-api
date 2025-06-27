@@ -25,7 +25,7 @@ if not os.getenv("OPENAI_API_KEY"):
 # ────────── CONSTANTS ──────────
 STAGE1_PTH = Path("/var/models/weights/stage1_engine_detector.pth")
 STAGE2_PTH = Path("/var/models/weights/panns_cnn14_checklist_best_aug.pth")
-SEARCH_MODULES = ["stage1_model", "pannsupgraded_model", "pannsupgraded"]
+SEARCH_MODULES = ["models.stage1_model", "models.pannsupgraded"]
 CLASS_STAGE1, CLASS_STAGE2 = "Stage1EngineDetector", "PannsChecklist"
 
 DISPLAY = {
@@ -298,6 +298,6 @@ def helper():
     return jsonify({"reply": reply, "show_ad": show_ad, "count": cnt})
 
 # ────────── run ──────────
-if __name__ == "__main__":
+ if __name__ == "__main__":   
     print("🚀  Back-end → http://127.0.0.1:5050")
     app.run(port=5050, debug=False)
