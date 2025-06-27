@@ -23,7 +23,7 @@ if not os.getenv("OPENAI_API_KEY"):
     sys.exit("❌  OPENAI_API_KEY missing in .env")
 
 # ────────── CONSTANTS ──────────
-STAGE1_PTH = Path("var/models/weights/stage1_engine_detector.pth")
+STAGE1_PTH = Path("models/weights/stage1_engine_detector.pth")
 STAGE2_PTH = Path("models/weights/panns_cnn14_checklist_best_aug.pth")
 SEARCH_MODULES = ["stage1_model", "pannsupgraded_model", "pannsupgraded"]
 CLASS_STAGE1, CLASS_STAGE2 = "Stage1EngineDetector", "PannsChecklist"
