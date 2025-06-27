@@ -298,6 +298,6 @@ def helper():
     return jsonify({"reply": reply, "show_ad": show_ad, "count": cnt})
 
 # ────────── run ──────────
- if __name__ == "__main__":   
-    print("🚀  Back-end → http://127.0.0.1:5050")
+ if __name__ == "__main__":
+    print("✅  Back-end → http://127.0.0.1:5050")
     app.run(port=5050, debug=False)
