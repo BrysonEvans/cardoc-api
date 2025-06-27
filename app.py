@@ -1,9 +1,8 @@
 """
 app.py — CarDoc AI
-2025-06-21 patch 12
-• Now loads weights from Render Persistent Disk (/var/models/weights)
-• /healthz + dynamic PORT retained
-• Otherwise identical to prior version
+2025-06-21 patch 10
+• FIX: exclude “_no_fault” from DISPLAY lookup (no more KeyError on silent clip)
+• All previous features retained
 """
 
 from __future__ import annotations
@@ -11,12 +10,7 @@ import importlib, inspect, os, sqlite3, subprocess, sys, tempfile, traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
-# ensure our local modules are on the path
-sys.path.insert(0, "/app")
-
 import torch, torchaudio
-from stage1_model import Stage1EngineDetector
-from panns_infer import PannsChecklist
 from openai import OpenAI, OpenAIError
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
@@ -29,31 +23,29 @@ if not os.getenv("OPENAI_API_KEY"):
     sys.exit("❌  OPENAI_API_KEY missing in .env")
 
 # ────────── CONSTANTS ──────────
-DISK_ROOT       = Path("/var/models")           # Render disk mount
-STAGE1_PTH      = DISK_ROOT / "weights/stage1_engine_detector.pth"
-STAGE2_PTH      = DISK_ROOT / "weights/panns_cnn14_checklist_best_aug.pth"
-SEARCH_MODULES  = ["stage1_model", "pannsupgraded_model", "pannsupgraded"]
+STAGE1_PTH = Path("models/stage1_engine_detector.pth")
+STAGE2_PTH = Path("models/panns_cnn14_checklist_best_aug.pth")
+SEARCH_MODULES = ["stage1_model", "pannsupgraded_model", "pannsupgraded"]
 CLASS_STAGE1, CLASS_STAGE2 = "Stage1EngineDetector", "PannsChecklist"
 
 DISPLAY = {
-    "alternator_whine":      "Alternator Whine",
-    "pulley_belt_noise":     "Pulley Bearing / Serpentine Belt Noise",
-    "rod_knock":             "Rod Knock",
-    "timing_chain_rattle":   "Timing Chain Rattle",
+    "alternator_whine":  "Alternator Whine",
+    "pulley_belt_noise": "Pulley Bearing / Serpentine Belt Noise",
+    "rod_knock":         "Rod Knock",
+    "timing_chain_rattle": "Timing Chain Rattle",
 }
-MODEL_LABELS   = list(DISPLAY.keys()) + ["engine_idle", "silence"]
-IGNORE_LABELS  = {"engine_idle", "silence"}
+MODEL_LABELS = list(DISPLAY.keys()) + ["engine_idle", "silence"]
+IGNORE_LABELS = {"engine_idle", "silence"}
 
-CONF, FLAG        = 0.80, 0.60
-SILENCE_THRESH    = 0.80
+CONF, FLAG = 0.80, 0.60
+SILENCE_THRESH = 0.80
 TARGET_SR, CLIP_SEC = 32_000, 5
 
 FREE_CHATS_PER_DAY, AD_EVERY = 9, 3
-GPT_MODEL, TEMP    = "gpt-3.5-turbo", 0.4
+GPT_MODEL, TEMP = "gpt-3.5-turbo", 0.4
 MAX_HISTORY, SUMMARY_TRIGGER = 20, 3000
-
-DB_PATH           = Path("usage.db")
-DEVICE            = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DB_PATH = Path("usage.db")
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ────────── FLASK ──────────
 app = Flask(__name__)
@@ -82,27 +74,23 @@ with db() as c:
         """
     )
 
-def today() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+def today(): return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-def quota(device: str):
+def quota(device:str):
     with db() as c:
-        c.execute("INSERT OR IGNORE INTO usage VALUES(?,?,0,0)", (device, today()))
+        c.execute("INSERT OR IGNORE INTO usage VALUES(?,?,0,0)", (device,today()))
         cnt, sub = c.execute(
             "SELECT count, subscriber FROM usage WHERE device=? AND date=?",
             (device, today())
         ).fetchone()
-        if sub:
-            return True, False, cnt
-        if cnt >= FREE_CHATS_PER_DAY:
+        if sub: return True, False, cnt          # subscriber = unlimited
+        if cnt >= FREE_CHATS_PER_DAY:            # free tier exhausted
             return False, False, cnt
-        c.execute(
-            "UPDATE usage SET count=count+1 WHERE device=? AND date=?",
-            (device, today())
-        )
+        c.execute("UPDATE usage SET count=count+1 WHERE device=? AND date=?",
+                  (device, today()))
         c.commit()
         cnt += 1
-        return True, (cnt % AD_EVERY == 0), cnt
+        return True, cnt % AD_EVERY == 0, cnt    # ok, maybe show ad
 
 @app.route("/subscribe", methods=["POST"])
 def subscribe():
@@ -114,12 +102,12 @@ def subscribe():
         c.commit()
     return jsonify({"ok": True})
 
-# ────────── AUDIO & TENSOR ──────────
+# ────────── AUDIO ──────────
 def ffmpeg(src: Path, dst: Path):
-    subprocess.check_call([
-        "ffmpeg", "-v", "quiet", "-y", "-i", str(src),
-        "-ac", "1", "-ar", str(TARGET_SR), str(dst)
-    ])
+    subprocess.check_call(
+        ["ffmpeg", "-v", "quiet", "-y", "-i", str(src),
+         "-ac", "1", "-ar", str(TARGET_SR), str(dst)]
+    )
 
 def wav_tensor(w: Path):
     x, sr = torchaudio.load(str(w))
@@ -132,39 +120,25 @@ def wav_tensor(w: Path):
         x = torch.nn.functional.pad(x, (0, need - x.size(1)))
     return x.to(DEVICE)
 
-# ────────── MODEL loading helpers ──────────
-def lazy(cls_name: str):
+# ────────── MODEL loading ──────────
+def lazy(cls):
     for m in SEARCH_MODULES:
         try:
             mod = importlib.import_module(m)
-            if hasattr(mod, cls_name):
-                return getattr(mod, cls_name)
+            if hasattr(mod, cls):
+                return getattr(mod, cls)
         except ModuleNotFoundError:
-            continue
-    sys.exit(f"{cls_name} not found")
+            pass
+    sys.exit(f"{cls} not found")
 
 def load_or_build(path: Path, cls_name: str, labels: int):
-    try:
-        obj = torch.load(path, map_location=DEVICE)
-    except ModuleNotFoundError:
-        obj = torch.load(path, map_location=DEVICE, weights_only=True)
-
+    obj = torch.load(path, map_location=DEVICE)
     if hasattr(obj, "eval"):
         return obj.to(DEVICE).eval()
-
-    if cls_name == CLASS_STAGE1:
-        cls = Stage1EngineDetector
-    elif cls_name == CLASS_STAGE2:
-        cls = PannsChecklist
-    else:
-        cls = lazy(cls_name)
-
-    sig = inspect.signature(cls)
-    kwargs = {k: labels for k in sig.parameters if k in ("num_labels", "num_classes", "classes")}
-    model = cls(**kwargs).to(DEVICE)
-
-    state_dict = obj.get("state_dict", obj) if isinstance(obj, dict) else obj
-    model.load_state_dict(state_dict, strict=False)
+    cls = lazy(cls_name)
+    model = cls(**{p: labels for p in inspect.signature(cls).parameters
+                   if p in ("num_labels", "num_classes", "classes")}).to(DEVICE)
+    model.load_state_dict(obj.get("state_dict", obj), strict=False)
     model.eval()
     return model
 
@@ -189,7 +163,6 @@ def predict():
     f = request.files.get("file")
     if not f:
         return jsonify({"error": "no file"}), 400
-
     with tempfile.TemporaryDirectory() as td:
         raw, wav = Path(td) / "raw", Path(td) / "clip.wav"
         f.save(raw)
@@ -203,12 +176,12 @@ def predict():
             traceback.print_exc()
             return jsonify({"error": str(e)}), 500
 
-# ────────── CHAT helpers (unchanged) ──────────
+# ────────── CHAT memory ──────────
 def store(dev, role, text):
     with db() as c:
         c.execute(
             "INSERT INTO chat VALUES(?,?,?,?)",
-            (dev, int(datetime.utcnow().timestamp() * 1000), role, text)
+            (dev, int(datetime.utcnow().timestamp()*1000), role, text)
         )
         c.commit()
 
@@ -231,21 +204,22 @@ def maybe_sum(dev):
     try:
         summ = client.chat.completions.create(
             model=GPT_MODEL,
-            messages=[{"role": "system", "content": "Summarise chat ≤100 words:"}] + hist(dev),
+            messages=[{"role": "system", "content": "Summarise chat ≤100 words:"}]
+                     + hist(dev),
             temperature=0.3,
-            max_tokens=120
+            max_tokens=120,
         ).choices[0].message.content.strip()
     except OpenAIError:
         return
     with db() as c:
         c.execute("DELETE FROM chat WHERE device=?", (dev,))
         c.execute(
-            "INSERT OR REPLACE INTO summary VALUES(?,?)",
-            (dev, summ)
+            "INSERT OR REPLACE INTO summary VALUES(?,?)", (dev, summ)
         )
         c.commit()
 
-def intro(no_fault: bool, faults: str) -> str:
+# ────────── helpers ──────────
+def intro(no_fault: bool, faults: str):
     if no_fault:
         return (
             "Hi, I'm CarDoc AI. I didn’t detect a clear engine-sound pattern.\n"
@@ -255,10 +229,10 @@ def intro(no_fault: bool, faults: str) -> str:
     return (
         f"Hi, I'm CarDoc AI. I detected possible {faults}.\n"
         "To narrow this down, could you tell me the vehicle’s make & model "
-        "and when/where you hear the noise (cold start, idle, acceleration, etc.)"
+        "and when/where you hear the noise (cold start, idle, acceleration, etc.)?"
     )
 
-def system_prompt(faults: str) -> str:
+def system_prompt(faults: str):
     return (
         "You are CarDoc AI, an automotive assistant.\n"
         f"Focus on these suspected faults: {faults or 'None'}.\n"
@@ -266,21 +240,22 @@ def system_prompt(faults: str) -> str:
         "Ask short, clear diagnostic questions.\n"
         "Provide only safe inspection steps (vehicle off or safe distance). "
         "Do NOT give hazardous DIY repair instructions. "
-        "Do not immediately refer to a professional mechanic unless safety demands."
+        "Do not immediately refer to a professional mechanic unless safety demands it."
     )
 
+# ────────── /gpt-helper ──────────
 @app.route("/gpt-helper", methods=["POST"])
 def helper():
-    d      = request.get_json(force=True)
-    dev    = d.get("device_id") or request.remote_addr or "unknown"
-    ok, ad, cnt = quota(dev)
+    d = request.get_json(force=True)
+    dev = d.get("device_id") or request.remote_addr or "unknown"
+    ok, show_ad, cnt = quota(dev)
     if not ok:
-        return jsonify({"error": "quota_exceeded", "limit": FREE_CHATS_PER_DAY}), 429
+        return jsonify({"error": "quota_exceeded", "limit": FREE_CHATS_PER_DAY}), 402
 
-    scores   = d.get("scores", {})
+    scores = d.get("scores", {})
     no_fault = scores.get("_no_fault")
-    convo    = d.get("conversation") or []
-    first    = len(convo) == 0
+    convo = d.get("conversation") or []
+    first_turn = len(convo) == 0
     user_msg = convo[-1].get("text", "") if convo else ""
 
     faults = [
@@ -289,11 +264,13 @@ def helper():
     ]
     faults_line = ", ".join(faults)
 
-    if first:
+    # first reply (deterministic, no GPT)
+    if first_turn:
         reply = intro(bool(no_fault), faults_line)
         store(dev, "assistant", reply)
-        return jsonify({"reply": reply, "show_ad": ad, "count": cnt})
+        return jsonify({"reply": reply, "show_ad": show_ad, "count": cnt})
 
+    # GPT turn
     ctx = [{"role": "system", "content": system_prompt(faults_line)}]
     with db() as c:
         row = c.execute(
@@ -309,7 +286,7 @@ def helper():
             model=GPT_MODEL,
             messages=ctx,
             temperature=TEMP,
-            max_tokens=180
+            max_tokens=180,
         ).choices[0].message.content.strip()
     except OpenAIError as e:
         traceback.print_exc()
@@ -318,15 +295,9 @@ def helper():
     store(dev, "user", user_msg)
     store(dev, "assistant", reply)
     maybe_sum(dev)
-    return jsonify({"reply": reply, "show_ad": ad, "count": cnt})
-
-# ────────── health check ──────────
-@app.route("/healthz")
-def healthz():
-    return "ok", 200
+    return jsonify({"reply": reply, "show_ad": show_ad, "count": cnt})
 
 # ────────── run ──────────
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 5050))
-    print(f"🚀  Back-end → http://0.0.0.0:{port}")
-    app.run(host="0.0.0.0", port=port, debug=False)
+    print("🚀  Back-end → http://127.0.0.1:5050")
+    app.run(port=5050, debug=False)
