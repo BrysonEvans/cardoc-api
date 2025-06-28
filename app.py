@@ -222,7 +222,7 @@ def maybe_sum(dev):
 def intro(no_fault: bool, faults: str):
     if no_fault:
         return (
-            "Hi, I'm CarDoc AI. I didn’t detect a clear engine-sound pattern.\n"
+            "Hi, I'm CarDoc AI. I didn’t detect a clear engine-sound pattern."
             "Could you share the vehicle’s make & model, describe the noise, "
             "or try recording closer to the sound source?"
         )
