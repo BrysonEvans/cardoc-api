@@ -1,8 +1,8 @@
 """
 app.py — CarDoc AI
-2025-06-21 patch 10 (patched for correct no-sound prompt)
-• FIX: exclude “_no_fault” from DISPLAY lookup (no more KeyError on silent clip)
-• PATCH: intro() correctly triggers "no sound detected" message on silence/_no_fault.
+2025-06-21 patch 11 (model path fix for Render/GitHub deployment + debug prints)
+• FIX: Model paths now default to 'models/' for Render & local dev
+• DEBUG: Print audio stats, stage1/stage2 outputs to help troubleshoot
 • All previous features retained
 """
 
@@ -24,8 +24,8 @@ if not os.getenv("OPENAI_API_KEY"):
     sys.exit("❌  OPENAI_API_KEY missing in .env")
 
 # ────────── CONSTANTS ──────────
-STAGE1_PTH = Path("/var/models/weights/stage1_engine_detector.pth")
-STAGE2_PTH = Path("/var/models/weights/panns_cnn14_checklist_best_aug.pth")
+STAGE1_PTH = Path("models/stage1_engine_detector.pth")
+STAGE2_PTH = Path("models/panns_cnn14_checklist_best_aug.pth")
 SEARCH_MODULES = ["models.stage1_model", "models.pannsupgraded"]
 CLASS_STAGE1, CLASS_STAGE2 = "Stage1EngineDetector", "PannsChecklist"
 
@@ -169,10 +169,22 @@ def predict():
         f.save(raw)
         try:
             ffmpeg(raw, wav)
+            audio_tensor = wav_tensor(wav)
+            print("DEBUG: audio_tensor shape:", audio_tensor.shape)
+            # Stage 1 direct prediction/debug
+            stage1_raw = torch.sigmoid(stage1(audio_tensor)).squeeze().cpu().numpy()
+            print("DEBUG: stage1 raw output:", stage1_raw)
             p1 = stage1_probs(wav)
+            print("DEBUG: stage1_probs:", p1)
             if p1["silence"] >= SILENCE_THRESH:
+                print("DEBUG: Silence detected at stage 1.")
                 return jsonify({"silence": 1.0, "_no_fault": True})
-            return jsonify(stage2_probs(wav))
+            # Stage 2 direct prediction/debug
+            stage2_raw = torch.sigmoid(stage2(audio_tensor)).squeeze().cpu().numpy()
+            print("DEBUG: stage2 raw output:", stage2_raw)
+            p2 = stage2_probs(wav)
+            print("DEBUG: stage2_probs:", p2)
+            return jsonify(p2)
         except Exception as e:
             traceback.print_exc()
             return jsonify({"error": str(e)}), 500
