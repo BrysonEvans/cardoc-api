@@ -1,8 +1,7 @@
 """
 app.py — CarDoc AI
-2025-06-21 patch 11d (force flush, robust file size logging for Render troubleshooting)
-• FIX: All print() now flush immediately for Render logs
-• NEW: File size of upload and conversion printed in /predict
+2025-06-21 patch 11e (audio tensor stats + sample for Render debugging)
+• NEW: Print stats and 10 sample values from audio_tensor in /predict
 • All previous features retained
 """
 
@@ -179,6 +178,15 @@ def predict():
             print(f"DEBUG: Converted to mono WAV. Path: {wav} Size: {wav_size} bytes", flush=True)
             audio_tensor = wav_tensor(wav)
             print("DEBUG: audio_tensor shape:", audio_tensor.shape, flush=True)
+            # --------- AUDIO TENSOR STATS + SAMPLE ---------
+            print("DEBUG: audio_tensor stats:",
+                  "min:", audio_tensor.min().item(),
+                  "max:", audio_tensor.max().item(),
+                  "mean:", audio_tensor.mean().item(),
+                  flush=True)
+            print("DEBUG: first 10 audio samples:",
+                  audio_tensor.flatten()[:10].tolist(),
+                  flush=True)
             # Stage 1 direct prediction/debug (fixed)
             stage1_raw = torch.sigmoid(stage1(audio_tensor)).squeeze().cpu().detach().numpy()
             print("DEBUG: stage1 raw output:", stage1_raw, flush=True)
