@@ -1,7 +1,8 @@
 """
 app.py — CarDoc AI
-2025-06-21 patch 11b (detach fix for all tensor→numpy calls)
-• FIX: .detach() added before .numpy() for all PyTorch outputs (stage1 and stage2, debug and prod paths)
+2025-06-21 patch 11c (force flush print/debug logs for Render)
+• FIX: All print() in /predict now flush immediately for Render logs
+• RECOMMENDED: sys.stdout reconfigured for line-buffering at top
 • All previous features retained
 """
 
@@ -15,6 +16,10 @@ from openai import OpenAI, OpenAIError
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+
+# ────────── FORCE FLUSH FOR LOGS ──────────
+import sys
+sys.stdout.reconfigure(line_buffering=True)
 
 # ────────── ENV / OPENAI ──────────
 load_dotenv()
@@ -169,20 +174,20 @@ def predict():
         try:
             ffmpeg(raw, wav)
             audio_tensor = wav_tensor(wav)
-            print("DEBUG: audio_tensor shape:", audio_tensor.shape)
+            print("DEBUG: audio_tensor shape:", audio_tensor.shape, flush=True)
             # Stage 1 direct prediction/debug (fixed)
             stage1_raw = torch.sigmoid(stage1(audio_tensor)).squeeze().cpu().detach().numpy()
-            print("DEBUG: stage1 raw output:", stage1_raw)
+            print("DEBUG: stage1 raw output:", stage1_raw, flush=True)
             p1 = stage1_probs(wav)
-            print("DEBUG: stage1_probs:", p1)
+            print("DEBUG: stage1_probs:", p1, flush=True)
             if p1["silence"] >= SILENCE_THRESH:
-                print("DEBUG: Silence detected at stage 1.")
+                print("DEBUG: Silence detected at stage 1.", flush=True)
                 return jsonify({"silence": 1.0, "_no_fault": True})
             # Stage 2 direct prediction/debug (fixed)
             stage2_raw = torch.sigmoid(stage2(audio_tensor)).squeeze().cpu().detach().numpy()
-            print("DEBUG: stage2 raw output:", stage2_raw)
+            print("DEBUG: stage2 raw output:", stage2_raw, flush=True)
             p2 = stage2_probs(wav)
-            print("DEBUG: stage2_probs:", p2)
+            print("DEBUG: stage2_probs:", p2, flush=True)
             return jsonify(p2)
         except Exception as e:
             traceback.print_exc()
@@ -312,5 +317,5 @@ def helper():
 
 # ────────── run ──────────
 if __name__ == "__main__":
-    print("✅  Back-end → http://127.0.0.1:5050")
+    print("✅  Back-end → http://127.0.0.1:5050", flush=True)
     app.run(port=5050, debug=False)
