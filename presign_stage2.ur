@@ -1,0 +1,1 @@
+https://cardoc-models-us-east-2.s3.us-east-2.amazonaws.com/models/panns_cnn14_checklist_best_aug.pth?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA6QYOITBCOLDNCJIX%2F20250622%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20250622T201647Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=f1f79853061118342784382d4faeff5c8980a1e144910b9febb61bb7aeca9b74
