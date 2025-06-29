@@ -1,8 +1,7 @@
 """
 app.py — CarDoc AI
-2025-06-21 patch 11 (model path fix for Render/GitHub deployment + debug prints)
-• FIX: Model paths now default to 'models/' for Render & local dev
-• DEBUG: Print audio stats, stage1/stage2 outputs to help troubleshoot
+2025-06-21 patch 11b (detach fix for all tensor→numpy calls)
+• FIX: .detach() added before .numpy() for all PyTorch outputs (stage1 and stage2, debug and prod paths)
 • All previous features retained
 """
 
@@ -148,14 +147,14 @@ stage2 = load_or_build(STAGE2_PTH, CLASS_STAGE2, len(MODEL_LABELS))
 
 @torch.inference_mode()
 def stage1_probs(w: Path):
-    p = torch.sigmoid(stage1(wav_tensor(w))).squeeze().cpu().numpy()
+    p = torch.sigmoid(stage1(wav_tensor(w))).squeeze().cpu().detach().numpy()
     if p.ndim == 0:
         return {"engine_idle": float(p), "silence": 1 - float(p)}
     return {"engine_idle": float(p[0]), "silence": float(p[1])}
 
 @torch.inference_mode()
 def stage2_probs(w: Path):
-    p = torch.sigmoid(stage2(wav_tensor(w))).squeeze().cpu().numpy()
+    p = torch.sigmoid(stage2(wav_tensor(w))).squeeze().cpu().detach().numpy()
     return {l: round(float(v), 4) for l, v in zip(MODEL_LABELS, p)}
 
 # ────────── /predict ──────────
@@ -171,16 +170,16 @@ def predict():
             ffmpeg(raw, wav)
             audio_tensor = wav_tensor(wav)
             print("DEBUG: audio_tensor shape:", audio_tensor.shape)
-            # Stage 1 direct prediction/debug
-            stage1_raw = torch.sigmoid(stage1(audio_tensor)).squeeze().cpu().numpy()
+            # Stage 1 direct prediction/debug (fixed)
+            stage1_raw = torch.sigmoid(stage1(audio_tensor)).squeeze().cpu().detach().numpy()
             print("DEBUG: stage1 raw output:", stage1_raw)
             p1 = stage1_probs(wav)
             print("DEBUG: stage1_probs:", p1)
             if p1["silence"] >= SILENCE_THRESH:
                 print("DEBUG: Silence detected at stage 1.")
                 return jsonify({"silence": 1.0, "_no_fault": True})
-            # Stage 2 direct prediction/debug
-            stage2_raw = torch.sigmoid(stage2(audio_tensor)).squeeze().cpu().numpy()
+            # Stage 2 direct prediction/debug (fixed)
+            stage2_raw = torch.sigmoid(stage2(audio_tensor)).squeeze().cpu().detach().numpy()
             print("DEBUG: stage2 raw output:", stage2_raw)
             p2 = stage2_probs(wav)
             print("DEBUG: stage2_probs:", p2)
