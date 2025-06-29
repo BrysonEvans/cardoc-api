@@ -1,7 +1,8 @@
 """
 app.py — CarDoc AI
-2025-06-21 patch 10
+2025-06-21 patch 10 (patched for correct no-sound prompt)
 • FIX: exclude “_no_fault” from DISPLAY lookup (no more KeyError on silent clip)
+• PATCH: intro() correctly triggers "no sound detected" message on silence/_no_fault.
 • All previous features retained
 """
 
@@ -219,15 +220,17 @@ def maybe_sum(dev):
         c.commit()
 
 # ────────── helpers ──────────
-def intro(no_fault: bool, faults: str):
+def intro(scores: dict, faults_line: str):
+    # PATCH: Show "no sound detected" message if _no_fault set OR if no faults detected
+    no_fault = bool(scores.get("_no_fault")) or not faults_line
     if no_fault:
         return (
-            "Hi, I'm CarDoc AI. I didn’t detect a clear engine-sound pattern."
+            "Hi, I'm CarDoc AI. I didn’t detect a clear engine-sound pattern. "
             "Could you share the vehicle’s make & model, describe the noise, "
             "or try recording closer to the sound source?"
         )
     return (
-        f"Hi, I'm CarDoc AI. I detected possible {faults}.\n"
+        f"Hi, I'm CarDoc AI. I detected possible {faults_line}.\n"
         "To narrow this down, could you tell me the vehicle’s make & model "
         "and when/where you hear the noise (cold start, idle, acceleration, etc.)?"
     )
@@ -253,7 +256,6 @@ def helper():
         return jsonify({"error": "quota_exceeded", "limit": FREE_CHATS_PER_DAY}), 402
 
     scores = d.get("scores", {})
-    no_fault = scores.get("_no_fault")
     convo = d.get("conversation") or []
     first_turn = len(convo) == 0
     user_msg = convo[-1].get("text", "") if convo else ""
@@ -266,7 +268,7 @@ def helper():
 
     # first reply (deterministic, no GPT)
     if first_turn:
-        reply = intro(bool(no_fault), faults_line)
+        reply = intro(scores, faults_line)
         store(dev, "assistant", reply)
         return jsonify({"reply": reply, "show_ad": show_ad, "count": cnt})
 
