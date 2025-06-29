@@ -1,8 +1,8 @@
 """
 app.py — CarDoc AI
-2025-06-21 patch 11c (force flush print/debug logs for Render)
-• FIX: All print() in /predict now flush immediately for Render logs
-• RECOMMENDED: sys.stdout reconfigured for line-buffering at top
+2025-06-21 patch 11d (force flush, robust file size logging for Render troubleshooting)
+• FIX: All print() now flush immediately for Render logs
+• NEW: File size of upload and conversion printed in /predict
 • All previous features retained
 """
 
@@ -18,7 +18,6 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 # ────────── FORCE FLUSH FOR LOGS ──────────
-import sys
 sys.stdout.reconfigure(line_buffering=True)
 
 # ────────── ENV / OPENAI ──────────
@@ -171,8 +170,13 @@ def predict():
     with tempfile.TemporaryDirectory() as td:
         raw, wav = Path(td) / "raw", Path(td) / "clip.wav"
         f.save(raw)
+        # PRINT UPLOADED FILE SIZE:
+        raw_size = os.path.getsize(raw)
+        print(f"DEBUG: Saved uploaded file. Path: {raw} Size: {raw_size} bytes", flush=True)
         try:
             ffmpeg(raw, wav)
+            wav_size = os.path.getsize(wav)
+            print(f"DEBUG: Converted to mono WAV. Path: {wav} Size: {wav_size} bytes", flush=True)
             audio_tensor = wav_tensor(wav)
             print("DEBUG: audio_tensor shape:", audio_tensor.shape, flush=True)
             # Stage 1 direct prediction/debug (fixed)
