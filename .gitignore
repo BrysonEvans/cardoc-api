@@ -1,22 +1,43 @@
-# macOS cruft
+# macOS system cruft
 .DS_Store
 
 # Model weights (large / local only)
+models/
 weights/
 *.pth               # PyTorch checkpoints
 *.h5                # Keras / HDF5
 *.keras             # Keras SavedModel
 *.tflite            # TensorFlow Lite
 
+# BFG Repo Cleaner
+bfg.jar
+.bfg-report/
+
 # Python cache
 __pycache__/
 
-# ────────────────────────────────────────────────
-# Project-specific ignores
-# ────────────────────────────────────────────────
-
-# Local mixer experiment folders (e.g., mixer_v8/, mixer_v9/, mixer_v10/)
+# Local mixer experiment folders (if you have them)
 models/mixer_v*/
 
 # Presigned-URL files used by download_models.py
 presign_stage*.url
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# VSCode
+.vscode/
+
+# Node, React, npm, frontend stuff
+node_modules/
+build/
+dist/
+
+# Misc
+*.log
+*.tmp
+*.bak
+
+# Env files
+.env
+.env.*
