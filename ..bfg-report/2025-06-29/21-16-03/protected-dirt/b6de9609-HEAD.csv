@@ -1,0 +1,5 @@
+89dc58c809bd17270b575d30db7050b19bcd3e7d,DELETE,regular-file,models/effnetb0_fixed_v2/best_model.h5,18659608,
+4a8ef6ee4c2649815395a20cbf2c9872c20cb5b1,DELETE,regular-file,models/effnetb0_fixed_v2/final_model.h5,18659608,
+0ec8375cfda4e7d0824e9d938a8d1bb392f13f07,DELETE,regular-file,models/effnetb0_v1/best_model.h5,18654096,
+3e8fb63605416563d24a2ff560f26678afd38a1b,DELETE,regular-file,models/effnetb0_v1/final_model.h5,18654096,
+58eaa8b6f5a752fd633c115e19dfd369463f0d56,DELETE,regular-file,models/mixer_efflite0_v2/model.h5,18664576,
