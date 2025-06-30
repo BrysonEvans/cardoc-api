@@ -1,7 +1,7 @@
 """
 app.py — CarDoc AI
-2025-06-21 patch 11e (audio tensor stats + sample for Render debugging)
-• NEW: Print stats and 10 sample values from audio_tensor in /predict
+2025-06-21 patch 11f (per-class threshold logic, audio tensor stats + sample)
+• NEW: Uses +0.10 above original per-class thresholds for detection
 • All previous features retained
 """
 
@@ -40,7 +40,25 @@ DISPLAY = {
 MODEL_LABELS = list(DISPLAY.keys()) + ["engine_idle", "silence"]
 IGNORE_LABELS = {"engine_idle", "silence"}
 
-CONF, FLAG = 0.80, 0.60
+# ────────── THRESHOLDS (+0.10 for reduced false positives) ──────────
+CONF_THRESHOLDS = {
+    'alternator_whine': 0.70,
+    'pulley_belt_noise': 0.70,
+    'rod_knock': 0.70,
+    'timing_chain_rattle': 0.60,
+    'engine_idle': 0.65,
+    'silence': 0.75
+}
+
+FLAG_THRESHOLDS = {
+    'alternator_whine': 0.50,
+    'pulley_belt_noise': 0.45,
+    'rod_knock': 0.40,
+    'timing_chain_rattle': 0.35,
+    'engine_idle': 0.45,
+    'silence': 0.45
+}
+
 SILENCE_THRESH = 0.80
 TARGET_SR, CLIP_SEC = 32_000, 5
 
@@ -288,9 +306,10 @@ def helper():
     first_turn = len(convo) == 0
     user_msg = convo[-1].get("text", "") if convo else ""
 
+    # Per-class threshold logic (+0.10 over eval sweetspot)
     faults = [
         DISPLAY[k] for k, v in scores.items()
-        if k in DISPLAY and v >= FLAG
+        if k in DISPLAY and v >= FLAG_THRESHOLDS.get(k, 0.5)
     ]
     faults_line = ", ".join(faults)
 
