@@ -1,45 +1,79 @@
-# macOS system cruft
+###############################################################################
+#  CarDoc-AI — .gitignore
+#  • Source code (e.g. *.py) stays in Git
+#  • Binary model weights & other large artifacts stay OUT of Git
+###############################################################################
+
+# ──────────────────────────────
+# macOS / editor cruft
+# ──────────────────────────────
 .DS_Store
-
-# Model weights (large / local only)
-models/
-weights/
-*.pth               # PyTorch checkpoints
-*.h5                # Keras / HDF5
-*.keras             # Keras SavedModel
-*.tflite            # TensorFlow Lite
-
-# BFG Repo Cleaner
-bfg.jar
 .bfg-report/
-
-# Python cache
-__pycache__/
-
-# Local mixer experiment folders (if you have them)
-models/mixer_v*/
-
-# Presigned-URL files used by download_models.py
-presign_stage*.url
-
-# Jupyter Notebook checkpoints
-.ipynb_checkpoints/
-
-# VSCode
-.vscode/
-
-# Node, React, npm, frontend stuff
-node_modules/
-build/
-dist/
-
-# Misc
+bfg.jar
 *.log
 *.tmp
 *.bak
 
-# Env files
+# ──────────────────────────────
+# Python cache & virtual-envs
+# ──────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.venv/
+env/
+venv/
+.Python
+
+# ──────────────────────────────
+# IDE configs
+# ──────────────────────────────
+.vscode/
+.idea/
+
+# ──────────────────────────────
+# Jupyter notebooks checkpoints
+# ──────────────────────────────
+.ipynb_checkpoints/
+
+# ──────────────────────────────
+# Node / React (if any front-end)
+# ──────────────────────────────
+node_modules/
+dist/
+build/
+
+# ──────────────────────────────
+# LARGE  ML  ARTIFACTS  (ignored)
+# ──────────────────────────────
+#  – All common weight / checkpoint formats
+*.pth          # PyTorch
+*.pt
+*.ckpt         # Lightning
+*.h5           # Keras / HDF5
+*.keras
+*.tflite
+*.onnx
+*.bin
+*.pb
+
+#  – Entire sub-folders that only hold experimental weights
+models/mixer_v*/
+
+#  – Presigned-URL text stubs created by download_models.py
+presign_stage*.url
+
+#  – Generic local “weights” dump dir (if you use one)
+weights/
+
+# ──────────────────────────────
+# Environment secrets
+# ──────────────────────────────
 .env
 .env.*
 
-!models/*.py
+###############################################################################
+#  NOTE: the *models/* folder itself is **NOT** ignored,
+#        so definition files such as models/stage1_model.py remain tracked.
+###############################################################################
